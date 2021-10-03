@@ -1,0 +1,12 @@
+name: poc-yaml-xray-rule-test-example-com
+rules:
+  - method: GET
+    path: "/"
+    expression: |
+      response.status==200 && response.body.bcontains(b'Example Domain')
+
+detail:
+  author: test(http://example.com)
+  links: 
+    - http://example.com
+  tags: test

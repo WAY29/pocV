@@ -32,7 +32,8 @@ func cmdTag(cmd *cli.Cmd) {
 
 	cmd.Action = func() {
 		// TODO remove this
-		fmt.Printf("TODO REMOVE: %#v %#v %#v\n", *poc, *pocPath, *tag)
+		xrayPocs, nucleiPocs := utils.LoadPocs(poc, pocPath)
+		fmt.Printf("TODO REMOVE: %#v %#v %#v %#v %#v\n", *poc, *pocPath, *tag, xrayPocs, nucleiPocs)
 	}
 }
 

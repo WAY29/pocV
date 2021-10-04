@@ -11,7 +11,7 @@
 
 ## Build
 ```
-go build  -ldflags "-w -s" cmd/pocV/main.go
+go build  -ldflags "-w -s" cmd/pocV/pocV.go
 ```
 
 ## Example

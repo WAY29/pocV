@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	xray_check "github.com/WAY29/pocV/internal/xray/check"
+	"github.com/WAY29/pocV/internal/common/check"
 	common_structs "github.com/WAY29/pocV/pkg/common/structs"
 	xray_requests "github.com/WAY29/pocV/pkg/xray/requests"
 	"github.com/WAY29/pocV/utils"
@@ -65,7 +65,7 @@ func cmdRun(cmd *cli.Cmd) {
 
 		// 初始化dnslog平台
 		if !common_structs.InitCeyeApi(*apiKey, *domain) {
-			utils.Warning("No ceye api")
+			utils.WarningF("No Ceye api")
 		}
 
 		// 初始化http客户端
@@ -81,10 +81,10 @@ func cmdRun(cmd *cli.Cmd) {
 		// 检查
 
 		// 初始化check
-		xray_check.InitCheck(*threads, *rate, *verbose)
-		xray_check.Start(targets, xrayPocs)
-		xray_check.Wait()
-		xray_check.End()
+		check.InitCheck(*threads, *rate, *verbose)
+		check.Start(targets, xrayPocs, nucleiPocs)
+		check.Wait()
+		check.End()
 	}
 }
 

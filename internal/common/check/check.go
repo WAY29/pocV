@@ -2,7 +2,6 @@ package check
 
 import (
 	"fmt"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -11,9 +10,10 @@ import (
 	"time"
 
 	common_structs "github.com/WAY29/pocV/pkg/common/structs"
+	nuclei_structs "github.com/WAY29/pocV/pkg/nuclei/structs"
 	"github.com/WAY29/pocV/pkg/xray/cel"
 	"github.com/WAY29/pocV/pkg/xray/requests"
-	"github.com/WAY29/pocV/pkg/xray/structs"
+	xray_structs "github.com/WAY29/pocV/pkg/xray/structs"
 	"github.com/WAY29/pocV/utils"
 	"github.com/panjf2000/ants"
 )
@@ -38,11 +38,18 @@ func InitCheck(threads, rate int, verbose bool) {
 	Verbose = verbose
 }
 
-func Start(targets []string, pocs []structs.Poc) {
+func Start(targets []string, xray_pocs []xray_structs.Poc, nuclei_pocs []nuclei_structs.Poc) {
 	for _, target := range targets {
-		for _, poc := range pocs {
+		for _, poc := range xray_pocs {
 			WaitGroup.Add(1)
-			Pool.Invoke(&structs.Task{
+			Pool.Invoke(&xray_structs.Task{
+				Target: target,
+				Poc:    poc,
+			})
+		}
+		for _, poc := range nuclei_pocs {
+			WaitGroup.Add(1)
+			Pool.Invoke(&nuclei_structs.Task{
 				Target: target,
 				Poc:    poc,
 			})
@@ -59,31 +66,59 @@ func End() {
 }
 
 func check(taskInterface interface{}) {
+	var isVul bool
+	var err error
+	var target string
+	var pocName string
+
 	defer WaitGroup.Done()
 	<-Ticker.C
 
-	task, ok := taskInterface.(*structs.Task)
-	if !ok {
-		utils.ErrorF("Can't convert task interface: %#v", taskInterface)
-		return
-	}
-	target, poc := task.Target, task.Poc
+	switch taskInterface.(type) {
+	case *xray_structs.Task:
+		task, ok := taskInterface.(*xray_structs.Task)
+		if !ok {
+			utils.ErrorF("Can't convert task interface: %#v", taskInterface)
+			return
+		}
+		target, poc := task.Target, task.Poc
+		pocName = poc.Name
 
-	req, _ := http.NewRequest("GET", target, nil)
-	isVul, err := executePoc(req, &poc)
+		req, _ := http.NewRequest("GET", target, nil)
+		isVul, err = executeXrayPoc(req, &poc)
+	case *nuclei_structs.Task:
+		task, ok := taskInterface.(*nuclei_structs.Task)
+		if !ok {
+			utils.ErrorF("Can't convert task interface: %#v", taskInterface)
+			return
+		}
+		target, poc := task.Target, task.Poc
+		isVul, err = executeNucleiPoc(target, &poc)
+	}
+
 	if err != nil {
-		utils.ErrorF("Execute Poc (%v) error: %v", poc.Name, err.Error())
+		utils.ErrorF("Execute Poc (%v) error: %v", pocName, err.Error())
 		return
 	}
 	if isVul {
-		fmt.Printf("[+] %s (%s)\n", target, poc.Name)
+		fmt.Printf("[+] %s (%s)\n", target, pocName)
 	} else if Verbose {
-		fmt.Printf("[-] %s (%s)\n", target, poc.Name)
+		fmt.Printf("[-] %s (%s)\n", target, pocName)
 	}
 }
 
-func executePoc(oReq *http.Request, p *structs.Poc) (bool, error) {
-	utils.DebugF("Check Poc [%#v] (%#v)", oReq.URL.String(), p.Name)
+func executeNucleiPoc(target string, poc *nuclei_structs.Poc) (bool, error) {
+	// TODO nuclei
+
+	return false, nil
+}
+
+func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
+	var (
+		oReqUrlString = oReq.URL.String()
+	)
+
+	utils.DebugF("Check Poc [%#v] (%#v)", oReqUrlString, p.Name)
 
 	c := cel.NewEnvOption()
 
@@ -112,7 +147,7 @@ func executePoc(oReq *http.Request, p *structs.Poc) (bool, error) {
 	for k, expression := range set {
 		if k != "payload" {
 			if expression == "newReverse()" {
-				variableMap[k] = newReverse()
+				variableMap[k] = xrayNewReverse()
 				continue
 			}
 			out, err := cel.Evaluate(env, expression, variableMap)
@@ -121,7 +156,7 @@ func executePoc(oReq *http.Request, p *structs.Poc) (bool, error) {
 				continue
 			}
 			switch value := out.Value().(type) {
-			case *structs.UrlType:
+			case *xray_structs.UrlType:
 				variableMap[k] = cel.UrlTypeToString(value)
 			case int64:
 				variableMap[k] = int(value)
@@ -143,9 +178,12 @@ func executePoc(oReq *http.Request, p *structs.Poc) (bool, error) {
 	success := false
 
 	// 处理单条Rule
-	DealWithRule := func(rule structs.Rule) (bool, error) {
+	DealWithRule := func(rule xray_structs.Rule) (bool, error) {
 		var (
 			flag, ok bool
+			err      error
+			Request  *http.Request
+			Response *xray_structs.Response
 		)
 
 		for k1, v1 := range variableMap {
@@ -161,32 +199,43 @@ func executePoc(oReq *http.Request, p *structs.Poc) (bool, error) {
 			rule.Body = strings.ReplaceAll(strings.TrimSpace(rule.Body), "{{"+k1+"}}", value)
 		}
 
-		if oReq.URL.Path != "" && oReq.URL.Path != "/" {
-			req.Url.Path = fmt.Sprint(oReq.URL.Path, rule.Path)
+		// 尝试获取缓存
+		if Request, Response, ok = requests.XrayGetRequestResponseCache(&rule); !ok {
+			// 处理Path
+			if oReq.URL.Path != "" && oReq.URL.Path != "/" {
+				req.Url.Path = fmt.Sprint(oReq.URL.Path, rule.Path)
+			} else {
+				req.Url.Path = rule.Path
+			}
+			// 某些poc没有区分path和query，需要处理
+			req.Url.Path = strings.ReplaceAll(req.Url.Path, " ", "%20")
+			req.Url.Path = strings.ReplaceAll(req.Url.Path, "+", "%20")
+
+			// 克隆请求对象
+			Request, _ = http.NewRequest(rule.Method, fmt.Sprintf("%s://%s%s", req.Url.Scheme, req.Url.Host, req.Url.Path), strings.NewReader(rule.Body))
+
+			Request.Header = oReq.Header.Clone()
+			for k, v := range rule.Headers {
+				Request.Header.Set(k, v)
+			}
+
+			// 发起请求
+			Response, err = requests.DoRequest(Request, rule.FollowRedirects)
+			if err != nil {
+				return false, err
+			}
+
+			// 设置缓存
+			requests.XraySetRequestResponseCache(&rule, Request, Response)
 		} else {
-			req.Url.Path = rule.Path
-		}
-		// 某些poc没有区分path和query，需要处理
-		req.Url.Path = strings.ReplaceAll(req.Url.Path, " ", "%20")
-		req.Url.Path = strings.ReplaceAll(req.Url.Path, "+", "%20")
-
-		newRequest, _ := http.NewRequest(rule.Method, fmt.Sprintf("%s://%s%s", req.Url.Scheme, req.Url.Host, req.Url.Path), strings.NewReader(rule.Body))
-
-		newRequest.Header = oReq.Header.Clone()
-		for k, v := range rule.Headers {
-			newRequest.Header.Set(k, v)
+			utils.DebugF("Use Request Cache [%s%s]", oReqUrlString, rule.Path)
 		}
 
-		resp, err := requests.DoRequest(newRequest, rule.FollowRedirects)
-		if err != nil {
-			return false, err
-		}
-
-		variableMap["response"] = resp
+		variableMap["response"] = Response
 
 		// 先判断响应页面是否匹配search规则
 		if rule.Search != "" {
-			result := doSearch(strings.TrimSpace(rule.Search), string(resp.Body))
+			result := xrayDoSearch(strings.TrimSpace(rule.Search), string(Response.Body))
 			if result != nil && len(result) > 0 { // 正则匹配成功
 				for k, v := range result {
 					variableMap[k] = v
@@ -210,7 +259,7 @@ func executePoc(oReq *http.Request, p *structs.Poc) (bool, error) {
 		return flag, nil
 	}
 
-	DealWithRules := func(rules []structs.Rule) bool {
+	DealWithRules := func(rules []xray_structs.Rule) bool {
 		successFlag := false
 		for _, rule := range rules {
 			flag, err := DealWithRule(rule)
@@ -242,7 +291,7 @@ func executePoc(oReq *http.Request, p *structs.Poc) (bool, error) {
 	return success, nil
 }
 
-func doSearch(re string, body string) map[string]string {
+func xrayDoSearch(re string, body string) map[string]string {
 	r, err := regexp.Compile(re)
 	utils.WarningF("Regexp compile error: %v", err.Error())
 	if err != nil {
@@ -262,16 +311,15 @@ func doSearch(re string, body string) map[string]string {
 	return nil
 }
 
-func newReverse() *structs.Reverse {
+func xrayNewReverse() *xray_structs.Reverse {
 	letters := "1234567890abcdefghijklmnopqrstuvwxyz"
-	randSource := rand.New(rand.NewSource(time.Now().Unix()))
-	sub := utils.RandomStr(randSource, letters, 8)
+	sub := utils.RandomStr(letters, 8)
 	if common_structs.CeyeDomain == "" {
-		return &structs.Reverse{}
+		return &xray_structs.Reverse{}
 	}
 	urlStr := fmt.Sprintf("http://%s.%s", sub, common_structs.CeyeDomain)
 	u, _ := url.Parse(urlStr)
-	return &structs.Reverse{
+	return &xray_structs.Reverse{
 		Url:                requests.ParseUrl(u),
 		Domain:             u.Hostname(),
 		Ip:                 "",

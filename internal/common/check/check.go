@@ -259,29 +259,12 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 		return flag, nil
 	}
 
-	DealWithRules := func(rules []xray_structs.Rule) bool {
-		successFlag := false
-		for _, rule := range rules {
-			flag, err := DealWithRule(rule)
-			if err != nil {
-				utils.ErrorF("Execute Rule error: %#v", err.Error())
-			}
-
-			if err != nil || !flag { //如果false不继续执行后续rule
-				successFlag = false // 如果其中一步为flag，则直接break
-				break
-			}
-			successFlag = true
-		}
-		return successFlag
-	}
-
 	// Rules
 	if len(p.Rules) > 0 {
-		success = DealWithRules(p.Rules)
+		success = DealWithRules(DealWithRule, p.Rules)
 	} else { // Groups
 		for _, rules := range p.Groups {
-			success = DealWithRules(rules)
+			success = DealWithRules(DealWithRule, rules)
 			if success {
 				break
 			}
@@ -289,6 +272,23 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 	}
 
 	return success, nil
+}
+
+func DealWithRules(DealWithRuleFunc func(xray_structs.Rule) (bool, error), rules []xray_structs.Rule) bool {
+	successFlag := false
+	for _, rule := range rules {
+		flag, err := DealWithRuleFunc(rule)
+		if err != nil {
+			utils.ErrorF("Execute Rule error: %#v", err.Error())
+		}
+
+		if err != nil || !flag { //如果false不继续执行后续rule
+			successFlag = false // 如果其中一步为flag，则直接break
+			break
+		}
+		successFlag = true
+	}
+	return successFlag
 }
 
 func xrayDoSearch(re string, body string) map[string]string {

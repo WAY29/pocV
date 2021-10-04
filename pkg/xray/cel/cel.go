@@ -429,8 +429,7 @@ func (c *CustomLib) UpdateCompileOptions(args map[string]string) {
 
 func randomLowercase(n int) string {
 	lowercase := "abcdefghijklmnopqrstuvwxyz"
-	randSource := rand.New(rand.NewSource(time.Now().Unix()))
-	return utils.RandomStr(randSource, lowercase, n)
+	return utils.RandomStr(lowercase, n)
 }
 
 func reverseCheck(r *structs.Reverse, timeout int64) bool {

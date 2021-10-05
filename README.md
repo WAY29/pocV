@@ -1,6 +1,8 @@
 # pocV
 尝试打造一个兼容xray和nuclei的poc扫描框架，某知识星球作业
 
+## Feature
+- 支持ceye.io和dnslog.cn作为反连平台
 ## TODO
 - [x] xray
 - [ ] nuclei

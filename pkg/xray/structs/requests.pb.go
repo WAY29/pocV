@@ -20,6 +20,52 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ReverseType int32
+
+const (
+	ReverseType_Ceye     ReverseType = 0
+	ReverseType_DnslogCN ReverseType = 1
+)
+
+// Enum value maps for ReverseType.
+var (
+	ReverseType_name = map[int32]string{
+		0: "Ceye",
+		1: "DnslogCN",
+	}
+	ReverseType_value = map[string]int32{
+		"Ceye":     0,
+		"DnslogCN": 1,
+	}
+)
+
+func (x ReverseType) Enum() *ReverseType {
+	p := new(ReverseType)
+	*p = x
+	return p
+}
+
+func (x ReverseType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ReverseType) Descriptor() protoreflect.EnumDescriptor {
+	return file_requests_proto_enumTypes[0].Descriptor()
+}
+
+func (ReverseType) Type() protoreflect.EnumType {
+	return &file_requests_proto_enumTypes[0]
+}
+
+func (x ReverseType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ReverseType.Descriptor instead.
+func (ReverseType) EnumDescriptor() ([]byte, []int) {
+	return file_requests_proto_rawDescGZIP(), []int{0}
+}
+
 type UrlType struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -278,10 +324,11 @@ type Reverse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Url                *UrlType `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
-	Domain             string   `protobuf:"bytes,2,opt,name=domain,proto3" json:"domain,omitempty"`
-	Ip                 string   `protobuf:"bytes,3,opt,name=ip,proto3" json:"ip,omitempty"`
-	IsDomainNameServer bool     `protobuf:"varint,4,opt,name=is_domain_name_server,json=isDomainNameServer,proto3" json:"is_domain_name_server,omitempty"`
+	Url                *UrlType    `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	Domain             string      `protobuf:"bytes,2,opt,name=domain,proto3" json:"domain,omitempty"`
+	Ip                 string      `protobuf:"bytes,3,opt,name=ip,proto3" json:"ip,omitempty"`
+	IsDomainNameServer bool        `protobuf:"varint,4,opt,name=is_domain_name_server,json=isDomainNameServer,proto3" json:"is_domain_name_server,omitempty"`
+	ReverseType        ReverseType `protobuf:"varint,5,opt,name=reverse_type,json=reverseType,proto3,enum=structs.ReverseType" json:"reverse_type,omitempty"`
 }
 
 func (x *Reverse) Reset() {
@@ -344,6 +391,13 @@ func (x *Reverse) GetIsDomainNameServer() bool {
 	return false
 }
 
+func (x *Reverse) GetReverseType() ReverseType {
+	if x != nil {
+		return x.ReverseType
+	}
+	return ReverseType_Ceye
+}
+
 var File_requests_proto protoreflect.FileDescriptor
 
 var file_requests_proto_rawDesc = []byte{
@@ -389,7 +443,7 @@ var file_requests_proto_rawDesc = []byte{
 	0x79, 0x1a, 0x3a, 0x0a, 0x0c, 0x48, 0x65, 0x61, 0x64, 0x65, 0x72, 0x73, 0x45, 0x6e, 0x74, 0x72,
 	0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03,
 	0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x88, 0x01,
+	0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0xc1, 0x01,
 	0x0a, 0x07, 0x52, 0x65, 0x76, 0x65, 0x72, 0x73, 0x65, 0x12, 0x22, 0x0a, 0x03, 0x75, 0x72, 0x6c,
 	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x73, 0x74, 0x72, 0x75, 0x63, 0x74, 0x73,
 	0x2e, 0x55, 0x72, 0x6c, 0x54, 0x79, 0x70, 0x65, 0x52, 0x03, 0x75, 0x72, 0x6c, 0x12, 0x16, 0x0a,
@@ -398,7 +452,13 @@ var file_requests_proto_rawDesc = []byte{
 	0x09, 0x52, 0x02, 0x69, 0x70, 0x12, 0x31, 0x0a, 0x15, 0x69, 0x73, 0x5f, 0x64, 0x6f, 0x6d, 0x61,
 	0x69, 0x6e, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x5f, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x18, 0x04,
 	0x20, 0x01, 0x28, 0x08, 0x52, 0x12, 0x69, 0x73, 0x44, 0x6f, 0x6d, 0x61, 0x69, 0x6e, 0x4e, 0x61,
-	0x6d, 0x65, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x42, 0x0c, 0x5a, 0x0a, 0x2e, 0x2f, 0x3b, 0x73,
+	0x6d, 0x65, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x12, 0x37, 0x0a, 0x0c, 0x72, 0x65, 0x76, 0x65,
+	0x72, 0x73, 0x65, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x14,
+	0x2e, 0x73, 0x74, 0x72, 0x75, 0x63, 0x74, 0x73, 0x2e, 0x52, 0x65, 0x76, 0x65, 0x72, 0x73, 0x65,
+	0x54, 0x79, 0x70, 0x65, 0x52, 0x0b, 0x72, 0x65, 0x76, 0x65, 0x72, 0x73, 0x65, 0x54, 0x79, 0x70,
+	0x65, 0x2a, 0x25, 0x0a, 0x0b, 0x52, 0x65, 0x76, 0x65, 0x72, 0x73, 0x65, 0x54, 0x79, 0x70, 0x65,
+	0x12, 0x08, 0x0a, 0x04, 0x43, 0x65, 0x79, 0x65, 0x10, 0x00, 0x12, 0x0c, 0x0a, 0x08, 0x44, 0x6e,
+	0x73, 0x6c, 0x6f, 0x67, 0x43, 0x4e, 0x10, 0x01, 0x42, 0x0c, 0x5a, 0x0a, 0x2e, 0x2f, 0x3b, 0x73,
 	0x74, 0x72, 0x75, 0x63, 0x74, 0x73, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
@@ -414,26 +474,29 @@ func file_requests_proto_rawDescGZIP() []byte {
 	return file_requests_proto_rawDescData
 }
 
+var file_requests_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_requests_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_requests_proto_goTypes = []interface{}{
-	(*UrlType)(nil),  // 0: structs.UrlType
-	(*Request)(nil),  // 1: structs.Request
-	(*Response)(nil), // 2: structs.Response
-	(*Reverse)(nil),  // 3: structs.Reverse
-	nil,              // 4: structs.Request.HeadersEntry
-	nil,              // 5: structs.Response.HeadersEntry
+	(ReverseType)(0), // 0: structs.ReverseType
+	(*UrlType)(nil),  // 1: structs.UrlType
+	(*Request)(nil),  // 2: structs.Request
+	(*Response)(nil), // 3: structs.Response
+	(*Reverse)(nil),  // 4: structs.Reverse
+	nil,              // 5: structs.Request.HeadersEntry
+	nil,              // 6: structs.Response.HeadersEntry
 }
 var file_requests_proto_depIdxs = []int32{
-	0, // 0: structs.Request.url:type_name -> structs.UrlType
-	4, // 1: structs.Request.headers:type_name -> structs.Request.HeadersEntry
-	0, // 2: structs.Response.url:type_name -> structs.UrlType
-	5, // 3: structs.Response.headers:type_name -> structs.Response.HeadersEntry
-	0, // 4: structs.Reverse.url:type_name -> structs.UrlType
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	1, // 0: structs.Request.url:type_name -> structs.UrlType
+	5, // 1: structs.Request.headers:type_name -> structs.Request.HeadersEntry
+	1, // 2: structs.Response.url:type_name -> structs.UrlType
+	6, // 3: structs.Response.headers:type_name -> structs.Response.HeadersEntry
+	1, // 4: structs.Reverse.url:type_name -> structs.UrlType
+	0, // 5: structs.Reverse.reverse_type:type_name -> structs.ReverseType
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_requests_proto_init() }
@@ -496,13 +559,14 @@ func file_requests_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_requests_proto_rawDesc,
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_requests_proto_goTypes,
 		DependencyIndexes: file_requests_proto_depIdxs,
+		EnumInfos:         file_requests_proto_enumTypes,
 		MessageInfos:      file_requests_proto_msgTypes,
 	}.Build()
 	File_requests_proto = out.File

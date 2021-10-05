@@ -7,6 +7,16 @@ import (
 	"time"
 )
 
+const (
+	AsciiLowercase          = "abcdefghijklmnopqrstuvwxyz"
+	AsciiUppercase          = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	AsciiLetters            = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	AsciiDigits             = "0123456789"
+	AsciiLowercaseAndDigits = AsciiLowercase + AsciiDigits
+	AsciiUppercaseAndDigits = AsciiUppercase + AsciiDigits
+	AsciiLettersAndDigits   = AsciiLetters + AsciiDigits
+)
+
 // 获取随机字符串
 func RandomStr(letterBytes string, n int) string {
 	randSource := rand.New(rand.NewSource(time.Now().Unix()))

@@ -29,9 +29,15 @@ message Response {
   bytes body = 5;
 }
 
+enum ReverseType {
+  Ceye = 0;
+  DnslogCN =  1;
+}
+
 message Reverse {
   UrlType url = 1;
   string domain = 2;
   string ip = 3;
   bool is_domain_name_server = 4;
+  ReverseType reverse_type = 5;
 }

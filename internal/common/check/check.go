@@ -13,6 +13,7 @@ import (
 	nuclei_structs "github.com/WAY29/pocV/pkg/nuclei/structs"
 	"github.com/WAY29/pocV/pkg/xray/cel"
 	"github.com/WAY29/pocV/pkg/xray/requests"
+	"github.com/WAY29/pocV/pkg/xray/structs"
 	xray_structs "github.com/WAY29/pocV/pkg/xray/structs"
 	"github.com/WAY29/pocV/utils"
 	"github.com/panjf2000/ants"
@@ -115,19 +116,15 @@ func executeNucleiPoc(target string, poc *nuclei_structs.Poc) (bool, error) {
 
 func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 	var (
-		oReqUrlString = oReq.URL.String()
+		setPayloadValue string
+		oReqUrlString   = oReq.URL.String()
 	)
 
 	utils.DebugF("Check Poc [%#v] (%#v)", oReqUrlString, p.Name)
 
 	c := cel.NewEnvOption()
 
-	set := make(map[string]string, 0)
-	for _, item := range p.Set {
-		set[item.Key.(string)] = item.Value.(string)
-	}
-
-	c.UpdateCompileOptions(set)
+	c.UpdateCompileOptions(p.Set)
 	env, err := cel.NewEnv(&c)
 
 	if err != nil {
@@ -138,21 +135,23 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 	variableMap := make(map[string]interface{})
 	req, err := requests.ParseRequest(oReq)
 	if err != nil {
-		utils.Error(err)
+		utils.ErrorF(err.Error())
 		return false, err
 	}
 	variableMap["request"] = req
 
 	// 现在假定set中payload作为最后产出，那么先解析其他的自定义变量，更新map[string]interface{}后再来解析payload
-	for k, expression := range set {
+	for _, item := range p.Set {
+		k, expression := item.Key.(string), item.Value.(string)
 		if k != "payload" {
 			if expression == "newReverse()" {
-				variableMap[k] = xrayNewReverse()
+				reverse := xrayNewReverse()
+				variableMap[k] = reverse
 				continue
 			}
 			out, err := cel.Evaluate(env, expression, variableMap)
 			if err != nil {
-				utils.Error(err)
+				utils.ErrorF(err.Error())
 				continue
 			}
 			switch value := out.Value().(type) {
@@ -163,12 +162,14 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 			default:
 				variableMap[k] = fmt.Sprintf("%v", out)
 			}
+		} else {
+			setPayloadValue = expression
 		}
 	}
 
 	// 执行payload
-	if set["payload"] != "" {
-		out, err := cel.Evaluate(env, set["payload"], variableMap)
+	if setPayloadValue != "" {
+		out, err := cel.Evaluate(env, setPayloadValue, variableMap)
 		if err != nil {
 			return false, err
 		}
@@ -312,17 +313,35 @@ func xrayDoSearch(re string, body string) map[string]string {
 }
 
 func xrayNewReverse() *xray_structs.Reverse {
-	letters := "1234567890abcdefghijklmnopqrstuvwxyz"
-	sub := utils.RandomStr(letters, 8)
-	if common_structs.CeyeDomain == "" {
+	switch common_structs.ReversePlatformType {
+	case structs.ReverseType_Ceye:
+		sub := utils.RandomStr(utils.AsciiLowercaseAndDigits, 8)
+		urlStr := fmt.Sprintf("http://%s.%s", sub, common_structs.CeyeDomain)
+		u, _ := url.Parse(urlStr)
+		return &xray_structs.Reverse{
+			Url:                requests.ParseUrl(u),
+			Domain:             u.Hostname(),
+			Ip:                 "",
+			IsDomainNameServer: false,
+			ReverseType:        common_structs.ReversePlatformType,
+		}
+	case structs.ReverseType_DnslogCN:
+		dnslogCnRequest := common_structs.DnslogCNGetDomainRequest
+		resp, err := requests.DoRequest(dnslogCnRequest, false)
+		if err != nil {
+			utils.ErrorF("Can't get domain from dnslog.cn %v", err)
+			return &xray_structs.Reverse{}
+		}
+		urlStr := "http://" + string(resp.GetBody())
+		u, _ := url.Parse(urlStr)
+		return &xray_structs.Reverse{
+			Url:                requests.ParseUrl(u),
+			Domain:             u.Hostname(),
+			Ip:                 "",
+			IsDomainNameServer: false,
+			ReverseType:        common_structs.ReversePlatformType,
+		}
+	default:
 		return &xray_structs.Reverse{}
-	}
-	urlStr := fmt.Sprintf("http://%s.%s", sub, common_structs.CeyeDomain)
-	u, _ := url.Parse(urlStr)
-	return &xray_structs.Reverse{
-		Url:                requests.ParseUrl(u),
-		Domain:             u.Hostname(),
-		Ip:                 "",
-		IsDomainNameServer: false,
 	}
 }

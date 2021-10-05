@@ -22,6 +22,7 @@ import (
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/interpreter/functions"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
+	"gopkg.in/yaml.v2"
 )
 
 // 自定义Lib库，包含变量和函数
@@ -411,8 +412,9 @@ func (c *CustomLib) ProgramOptions() []cel.ProgramOption {
 	return c.programOptions
 }
 
-func (c *CustomLib) UpdateCompileOptions(args map[string]string) {
-	for k, v := range args {
+func (c *CustomLib) UpdateCompileOptions(args yaml.MapSlice) {
+	for _, item := range args {
+		k, v := item.Key.(string), item.Value.(string)
 		// 在执行之前是不知道变量的类型的，所以统一声明为字符型
 		// 所以randomInt虽然返回的是int型，在运算中却被当作字符型进行计算，需要重载string_*_string
 		var d *exprpb.Decl
@@ -433,24 +435,39 @@ func randomLowercase(n int) string {
 }
 
 func reverseCheck(r *structs.Reverse, timeout int64) bool {
-	if common_structs.CeyeApi == "" || r.Domain == "" {
+	switch common_structs.ReversePlatformType {
+	case structs.ReverseType_Ceye:
+		time.Sleep(time.Second * time.Duration(timeout))
+		sub := strings.Split(r.Domain, ".")[0]
+		urlStr := fmt.Sprintf("http://api.ceye.io/v1/records?token=%s&type=dns&filter=%s", common_structs.CeyeApi, sub)
+
+		utils.DebugF("got dnslog from : %s", urlStr)
+
+		req, _ := http.NewRequest("GET", urlStr, nil)
+		resp, err := requests.DoRequest(req, false)
+		if err != nil {
+			utils.ErrorF(err.Error())
+			return false
+		}
+
+		if !bytes.Contains(resp.Body, []byte(`"data": []`)) { // api返回结果不为空
+			return true
+		}
+		return false
+	case structs.ReverseType_DnslogCN:
+		time.Sleep(time.Second * time.Duration(timeout))
+		sub := strings.Split(r.Domain, ".")[0]
+		resp, err := requests.DoRequest(common_structs.DnslogCNGetRecordRequest, false)
+		if err != nil {
+			utils.ErrorF(err.Error())
+			return false
+		}
+		if bytes.Contains(resp.Body, []byte(sub)) { // api返回结果存在域名
+			return true
+		}
+		return false
+	default:
 		return false
 	}
-	time.Sleep(time.Second * time.Duration(timeout))
-	sub := strings.Split(r.Domain, ".")[0]
-	urlStr := fmt.Sprintf("http://api.ceye.io/v1/records?token=%s&type=dns&filter=%s", common_structs.CeyeApi, sub)
 
-	utils.DebugF("got dnslog from : %s", urlStr)
-
-	req, _ := http.NewRequest("GET", urlStr, nil)
-	resp, err := requests.DoRequest(req, false)
-	if err != nil {
-		utils.Error(err)
-		return false
-	}
-
-	if !bytes.Contains(resp.Body, []byte(`"data": []`)) { // api返回结果不为空
-		return true
-	}
-	return false
 }

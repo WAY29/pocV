@@ -8,6 +8,7 @@ import (
 	"github.com/WAY29/pocV/internal/common/check"
 	common_structs "github.com/WAY29/pocV/pkg/common/structs"
 	xray_requests "github.com/WAY29/pocV/pkg/xray/requests"
+	xray_structs "github.com/WAY29/pocV/pkg/xray/structs"
 	"github.com/WAY29/pocV/utils"
 	cli "github.com/jawher/mow.cli"
 )
@@ -58,6 +59,9 @@ func cmdRun(cmd *cli.Cmd) {
 	cmd.Spec = "(-t=<target> | -T=<targetFile>)... (-p=<poc> | -P=<pocpath>)... [--threads=<threads>] [--timeout=<timeout>] [--proxy=<proxy>] [-k=<ceye.api.key> | --key=<ceye.api.key>]  [-d=<ceye.subdomain> | --domain=<ceye.subdomain>] [--debug] [-v | --verbose]"
 
 	cmd.Action = func() {
+		// 设置变量
+		timeoutSecond := time.Duration(*timeout) * time.Second
+
 		if *debug {
 			*verbose = true
 		}
@@ -65,12 +69,13 @@ func cmdRun(cmd *cli.Cmd) {
 		utils.InitLog(*debug, *verbose)
 
 		// 初始化dnslog平台
-		if !common_structs.InitCeyeApi(*apiKey, *domain) {
-			utils.WarningF("No Ceye api")
+		common_structs.InitReversePlatform(*apiKey, *domain, timeoutSecond)
+		if common_structs.ReversePlatformType != xray_structs.ReverseType_Ceye {
+			utils.WarningF("No Ceye api, use dnslog.cn")
 		}
 
 		// 初始化http客户端
-		xray_requests.InitHttpClient(*threads, *proxy, time.Duration(*timeout)*time.Second)
+		xray_requests.InitHttpClient(*threads, *proxy, timeoutSecond)
 
 		// 加载目标
 		targets := utils.LoadTargets(target, targetFiles)

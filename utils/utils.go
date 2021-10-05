@@ -7,5 +7,5 @@ import (
 // 输出错误并退出
 func CliError(message string, exitCode int) {
 	Error("[-] " + message)
-	cli.Exit(2)
+	cli.Exit(exitCode)
 }

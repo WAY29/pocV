@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/WAY29/pocV/pkg/xray/structs"
 	"github.com/WAY29/pocV/utils"
 )
@@ -47,7 +49,8 @@ func InitHttpClient(ThreadsNum int, DownProxy string, Timeout time.Duration) err
 	if DownProxy != "" {
 		u, err := url.Parse(DownProxy)
 		if err != nil {
-			return err
+			wrappedErr := errors.Wrap(err, "Parse Proxy error")
+			return wrappedErr
 		}
 		tr.Proxy = http.ProxyURL(u)
 	}
@@ -163,11 +166,13 @@ func DoRequest(req *http.Request, redirect bool) (*structs.Response, error) {
 		defer oResp.Body.Close()
 	}
 	if err != nil {
-		return nil, err
+		wrappedErr := errors.Wrap(err, "Request error")
+		return nil, wrappedErr
 	}
 	resp, err := ParseResponse(oResp)
 	if err != nil {
-		return nil, err
+		wrappedErr := errors.Wrap(err, "Parse response error")
+		return nil, wrappedErr
 	}
 	return resp, err
 }
@@ -186,7 +191,8 @@ func ParseRequest(oReq *http.Request) (*structs.Request, error) {
 	} else {
 		data, err := ioutil.ReadAll(oReq.Body)
 		if err != nil {
-			return nil, err
+			wrappedErr := errors.Wrap(err, "Get request body error")
+			return nil, wrappedErr
 		}
 		req.Body = data
 		oReq.Body = ioutil.NopCloser(bytes.NewBuffer(data))
@@ -206,7 +212,8 @@ func ParseResponse(oResp *http.Response) (*structs.Response, error) {
 	resp.ContentType = oResp.Header.Get("Content-Type")
 	body, err := getRespBody(oResp)
 	if err != nil {
-		return nil, err
+		wrappedErr := errors.Wrap(err, "Get response body error")
+		return nil, wrappedErr
 	}
 	resp.Body = body
 	return &resp, nil
@@ -231,7 +238,8 @@ func getRespBody(oResp *http.Response) ([]byte, error) {
 	} else {
 		raw, err := ioutil.ReadAll(oResp.Body)
 		if err != nil {
-			return nil, err
+			wrappedErr := errors.Wrap(err, "Get response body error")
+			return nil, wrappedErr
 		}
 		body = raw
 	}

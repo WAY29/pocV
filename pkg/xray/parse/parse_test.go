@@ -7,9 +7,9 @@ import (
 	"github.com/WAY29/pocV/pkg/xray/structs"
 )
 
-func TestParse(t *testing.T) {
+func TestRuleParse(t *testing.T) {
 	expected_poc := &structs.Poc{
-		Name: "poc-yaml-example-com",
+		Name: "poc-yaml-xray-rule-test-example-com",
 		Rules: []structs.Rule{
 			{
 				Method:     "GET",
@@ -18,14 +18,50 @@ func TestParse(t *testing.T) {
 			},
 		},
 		Detail: structs.Detail{
-			Author: "name(link)",
+			Author: "test(http://example.com)",
 			Links: []string{
 				"http://example.com",
 			},
 			Tags: "test",
 		},
 	}
-	poc, err := ParseYaml("../../../tests/xray_test.yml")
+	poc, err := ParseYaml("../../../tests/xray/rule_test.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(expected_poc, poc) {
+		t.Errorf("\nexpected %#v\ngot %#v", expected_poc, poc)
+	}
+}
+
+func TestGroupParse(t *testing.T) {
+	expected_poc := &structs.Poc{
+		Name: "poc-yaml-xray-group-test-example-com",
+		Groups: map[string][]structs.Rule{
+			"example1": {
+				{
+					Method:     "GET",
+					Path:       "/",
+					Expression: "response.status==200 && response.body.bcontains(b'Example Domain')\n",
+				},
+			},
+			"example2": {
+				{
+					Method:     "GET",
+					Path:       "/",
+					Expression: "response.status==200 && response.body.bcontains(b'Example1 Domain')\n",
+				},
+			},
+		},
+		Detail: structs.Detail{
+			Author: "test(http://example.com)",
+			Links: []string{
+				"http://example.com",
+			},
+			Tags: "test",
+		},
+	}
+	poc, err := ParseYaml("../../../tests/xray/group_test.yml")
 	if err != nil {
 		t.Fatal(err)
 	}

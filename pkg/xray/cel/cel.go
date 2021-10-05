@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	common_structs "github.com/WAY29/pocV/pkg/common/structs"
 	"github.com/WAY29/pocV/pkg/xray/requests"
 	"github.com/WAY29/pocV/pkg/xray/structs"
@@ -34,21 +36,22 @@ type CustomLib struct {
 // 执行表达式
 func Evaluate(env *cel.Env, expression string, params map[string]interface{}) (ref.Val, error) {
 	ast, iss := env.Compile(expression)
-	if iss.Err() != nil {
-		utils.Error("compile: ", iss.Err())
-		return nil, iss.Err()
+	err := iss.Err()
+	if err != nil {
+		wrappedErr := errors.Wrap(err, "Compile error")
+		return nil, wrappedErr
 	}
 
 	prg, err := env.Program(ast)
 	if err != nil {
-		utils.ErrorF("Program creation error: %v", err)
-		return nil, err
+		wrappedErr := errors.Wrap(err, "Program creation error")
+		return nil, wrappedErr
 	}
 
 	out, _, err := prg.Eval(params)
 	if err != nil {
-		utils.ErrorF("Evaluation error: %v", err)
-		return nil, err
+		wrappedErr := errors.Wrap(err, "Evaluation error")
+		return nil, wrappedErr
 	}
 	return out, nil
 }
@@ -430,22 +433,21 @@ func (c *CustomLib) UpdateCompileOptions(args yaml.MapSlice) {
 }
 
 func reverseCheck(r *structs.Reverse, timeout int64) bool {
-	switch common_structs.ReversePlatformType {
+	switch r.ReverseType {
 	case structs.ReverseType_Ceye:
 		time.Sleep(time.Second * time.Duration(timeout))
 		sub := strings.Split(r.Domain, ".")[0]
 		urlStr := fmt.Sprintf("http://api.ceye.io/v1/records?token=%s&type=dns&filter=%s", common_structs.CeyeApi, sub)
-
-		utils.DebugF("got dnslog from : %s", urlStr)
-
 		req, _ := http.NewRequest("GET", urlStr, nil)
 		resp, err := requests.DoRequest(req, false)
 		if err != nil {
-			utils.ErrorF(err.Error())
+			wrappedErr := errors.Wrap(err, "Reverse check error")
+			utils.ErrorP(wrappedErr)
 			return false
 		}
 
 		if !bytes.Contains(resp.Body, []byte(`"data": []`)) { // api返回结果不为空
+			utils.DebugF("Got reverse dnslog from %s", r.Domain)
 			return true
 		}
 		return false
@@ -454,10 +456,13 @@ func reverseCheck(r *structs.Reverse, timeout int64) bool {
 		sub := strings.Split(r.Domain, ".")[0]
 		resp, err := requests.DoRequest(common_structs.DnslogCNGetRecordRequest, false)
 		if err != nil {
-			utils.ErrorF(err.Error())
+			wrappedErr := errors.Wrap(err, "Reverse check error")
+			utils.ErrorP(wrappedErr)
 			return false
 		}
+
 		if bytes.Contains(resp.Body, []byte(sub)) { // api返回结果存在域名
+			utils.DebugF("Got reverse dnslog from %s", r.Domain)
 			return true
 		}
 		return false

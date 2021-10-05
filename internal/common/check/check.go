@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
+
 	common_structs "github.com/WAY29/pocV/pkg/common/structs"
 	nuclei_structs "github.com/WAY29/pocV/pkg/nuclei/structs"
 	"github.com/WAY29/pocV/pkg/xray/cel"
@@ -79,7 +81,8 @@ func check(taskInterface interface{}) {
 	case *xray_structs.Task:
 		task, ok := taskInterface.(*xray_structs.Task)
 		if !ok {
-			utils.ErrorF("Can't convert task interface: %#v", taskInterface)
+			err := errors.New(fmt.Sprintf("Can't convert task interface: %#v", taskInterface))
+			utils.ErrorP(err)
 			return
 		}
 		target, poc := task.Target, task.Poc
@@ -90,7 +93,8 @@ func check(taskInterface interface{}) {
 	case *nuclei_structs.Task:
 		task, ok := taskInterface.(*nuclei_structs.Task)
 		if !ok {
-			utils.ErrorF("Can't convert task interface: %#v", taskInterface)
+			err := errors.New(fmt.Sprintf("Can't convert task interface: %#v", taskInterface))
+			utils.ErrorP(err)
 			return
 		}
 		target, poc := task.Target, task.Poc
@@ -98,13 +102,14 @@ func check(taskInterface interface{}) {
 	}
 
 	if err != nil {
-		utils.ErrorF("Execute Poc (%v) error: %v", pocName, err.Error())
+		wrappedErr := errors.Wrapf(err, "Run Poc (%v) error", pocName)
+		utils.ErrorP(wrappedErr)
 		return
 	}
 	if isVul {
-		fmt.Printf("[+] %s (%s)\n", target, pocName)
+		utils.SuccessF("%s (%s)", target, pocName)
 	} else if Verbose {
-		fmt.Printf("[-] %s (%s)\n", target, pocName)
+		utils.FailureF("%s (%s)", target, pocName)
 	}
 }
 
@@ -120,7 +125,7 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 		oReqUrlString   = oReq.URL.String()
 	)
 
-	utils.DebugF("Check Poc [%#v] (%#v)", oReqUrlString, p.Name)
+	utils.DebugF("Run Poc [%#v] (%#v)", oReqUrlString, p.Name)
 
 	c := cel.NewEnvOption()
 
@@ -128,14 +133,16 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 	env, err := cel.NewEnv(&c)
 
 	if err != nil {
-		utils.ErrorF("Environment creation error: %s\n", err.Error())
+		wrappedErr := errors.Wrap(err, "Environment creation error")
+		utils.ErrorP(wrappedErr)
 		return false, err
 	}
 
 	variableMap := make(map[string]interface{})
 	req, err := requests.ParseRequest(oReq)
 	if err != nil {
-		utils.ErrorF(err.Error())
+		wrappedErr := errors.Wrap(err, "Run poc error")
+		utils.ErrorP(wrappedErr)
 		return false, err
 	}
 	variableMap["request"] = req
@@ -151,7 +158,8 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 			}
 			out, err := cel.Evaluate(env, expression, variableMap)
 			if err != nil {
-				utils.ErrorF(err.Error())
+				wrappedErr := errors.Wrap(err, "Set variable error")
+				utils.ErrorP(wrappedErr)
 				continue
 			}
 			switch value := out.Value().(type) {
@@ -280,7 +288,8 @@ func DealWithRules(DealWithRuleFunc func(xray_structs.Rule) (bool, error), rules
 	for _, rule := range rules {
 		flag, err := DealWithRuleFunc(rule)
 		if err != nil {
-			utils.ErrorF("Execute Rule error: %#v", err.Error())
+			wrappedErr := errors.Wrap(err, "Execute Rule error")
+			utils.ErrorP(wrappedErr)
 		}
 
 		if err != nil || !flag { //如果false不继续执行后续rule
@@ -313,35 +322,32 @@ func xrayDoSearch(re string, body string) map[string]string {
 }
 
 func xrayNewReverse() *xray_structs.Reverse {
+	var urlStr string
 	switch common_structs.ReversePlatformType {
 	case structs.ReverseType_Ceye:
 		sub := utils.RandomStr(utils.AsciiLowercaseAndDigits, 8)
-		urlStr := fmt.Sprintf("http://%s.%s", sub, common_structs.CeyeDomain)
-		u, _ := url.Parse(urlStr)
-		return &xray_structs.Reverse{
-			Url:                requests.ParseUrl(u),
-			Domain:             u.Hostname(),
-			Ip:                 "",
-			IsDomainNameServer: false,
-			ReverseType:        common_structs.ReversePlatformType,
-		}
+		urlStr = fmt.Sprintf("http://%s.%s", sub, common_structs.CeyeDomain)
 	case structs.ReverseType_DnslogCN:
 		dnslogCnRequest := common_structs.DnslogCNGetDomainRequest
 		resp, err := requests.DoRequest(dnslogCnRequest, false)
 		if err != nil {
-			utils.ErrorF("Can't get domain from dnslog.cn %v", err)
+			wrappedErr := errors.Wrap(err, "Get reverse domain error: Can't get domain from dnslog.cn")
+			utils.ErrorP(wrappedErr)
 			return &xray_structs.Reverse{}
 		}
-		urlStr := "http://" + string(resp.GetBody())
-		u, _ := url.Parse(urlStr)
-		return &xray_structs.Reverse{
-			Url:                requests.ParseUrl(u),
-			Domain:             u.Hostname(),
-			Ip:                 "",
-			IsDomainNameServer: false,
-			ReverseType:        common_structs.ReversePlatformType,
-		}
+		urlStr = "http://" + string(resp.GetBody())
 	default:
 		return &xray_structs.Reverse{}
+	}
+
+	u, _ := url.Parse(urlStr)
+	utils.DebugF("Get reverse domain: %s", u.Hostname())
+
+	return &xray_structs.Reverse{
+		Url:                requests.ParseUrl(u),
+		Domain:             u.Hostname(),
+		Ip:                 "",
+		IsDomainNameServer: false,
+		ReverseType:        common_structs.ReversePlatformType,
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 // 判断所给路径文件/文件夹是否存在
@@ -42,7 +44,8 @@ func ReadFileAsLine(path string) ([]string, error) {
 	}
 	file, err := os.OpenFile(path, os.O_RDWR, 0666)
 	if err != nil {
-		return nil, err
+		wrappedErr := errors.Wrapf(err, "Open file %s error", path)
+		return nil, wrappedErr
 	}
 
 	buf := bufio.NewReader(file)
@@ -54,7 +57,8 @@ func ReadFileAsLine(path string) ([]string, error) {
 			if err == io.EOF {
 				break
 			} else {
-				return nil, err
+				wrappedErr := errors.Wrapf(err, "Read file %s error", path)
+				return nil, wrappedErr
 			}
 		}
 	}
@@ -67,11 +71,13 @@ func ReadFileN(path string, n int) ([]byte, error) {
 	data := make([]byte, n)
 
 	if !IsFile(path) {
-		return nil, os.ErrNotExist
+		wrappedErr := errors.Wrapf(os.ErrNotExist, "File %s not found", path)
+		return nil, wrappedErr
 	}
 	file, err := os.OpenFile(path, os.O_RDWR, 0666)
 	if err != nil {
-		return nil, err
+		wrappedErr := errors.Wrapf(os.ErrNotExist, "Open file %s error", path)
+		return nil, wrappedErr
 	}
 
 	file.Read(data)

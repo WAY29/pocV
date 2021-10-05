@@ -259,7 +259,7 @@ func NewEnvOption() CustomLib {
 					if !ok {
 						return types.ValOrErr(value, "unexpected type '%v' passed to randomLowercase", value.Type())
 					}
-					return types.String(randomLowercase(int(n)))
+					return types.String(utils.RandomStr(utils.AsciiLowercase, int(n)))
 				},
 			},
 			&functions.Overload{
@@ -427,11 +427,6 @@ func (c *CustomLib) UpdateCompileOptions(args yaml.MapSlice) {
 		}
 		c.envOptions = append(c.envOptions, cel.Declarations(d))
 	}
-}
-
-func randomLowercase(n int) string {
-	lowercase := "abcdefghijklmnopqrstuvwxyz"
-	return utils.RandomStr(lowercase, n)
 }
 
 func reverseCheck(r *structs.Reverse, timeout int64) bool {

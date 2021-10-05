@@ -3,6 +3,7 @@ package utils
 import (
 	"bufio"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 
@@ -83,4 +84,8 @@ func ReadFileN(path string, n int) ([]byte, error) {
 	file.Read(data)
 
 	return data, nil
+}
+
+func WriteFile(path string, data []byte) error {
+	return ioutil.WriteFile(path, data, 0)
 }

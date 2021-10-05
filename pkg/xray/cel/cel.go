@@ -441,7 +441,7 @@ func reverseCheck(r *structs.Reverse, timeout int64) bool {
 		req, _ := http.NewRequest("GET", urlStr, nil)
 		resp, err := requests.DoRequest(req, false)
 		if err != nil {
-			wrappedErr := errors.Wrap(err, "Reverse check error")
+			wrappedErr := errors.WithMessage(err, "Reverse check error")
 			utils.ErrorP(wrappedErr)
 			return false
 		}
@@ -456,7 +456,7 @@ func reverseCheck(r *structs.Reverse, timeout int64) bool {
 		sub := strings.Split(r.Domain, ".")[0]
 		resp, err := requests.DoRequest(common_structs.DnslogCNGetRecordRequest, false)
 		if err != nil {
-			wrappedErr := errors.Wrap(err, "Reverse check error")
+			wrappedErr := errors.WithMessage(err, "Reverse check error")
 			utils.ErrorP(wrappedErr)
 			return false
 		}

@@ -41,16 +41,16 @@ func InitCheck(threads, rate int, verbose bool) {
 	Verbose = verbose
 }
 
-func Start(targets []string, xray_pocs []xray_structs.Poc, nuclei_pocs []nuclei_structs.Poc) {
+func Start(targets []string, xrayPocMap map[string]xray_structs.Poc, nucleiPocMap map[string]nuclei_structs.Poc) {
 	for _, target := range targets {
-		for _, poc := range xray_pocs {
+		for _, poc := range xrayPocMap {
 			WaitGroup.Add(1)
 			Pool.Invoke(&xray_structs.Task{
 				Target: target,
 				Poc:    poc,
 			})
 		}
-		for _, poc := range nuclei_pocs {
+		for _, poc := range nucleiPocMap {
 			WaitGroup.Add(1)
 			Pool.Invoke(&nuclei_structs.Task{
 				Target: target,
@@ -102,7 +102,7 @@ func check(taskInterface interface{}) {
 	}
 
 	if err != nil {
-		wrappedErr := errors.Wrapf(err, "Run Poc (%v) error", pocName)
+		wrappedErr := errors.WithMessagef(err, "Run Poc (%v) error", pocName)
 		utils.ErrorP(wrappedErr)
 		return
 	}
@@ -133,7 +133,7 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 	env, err := cel.NewEnv(&c)
 
 	if err != nil {
-		wrappedErr := errors.Wrap(err, "Environment creation error")
+		wrappedErr := errors.WithMessage(err, "Environment creation error")
 		utils.ErrorP(wrappedErr)
 		return false, err
 	}
@@ -141,7 +141,7 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 	variableMap := make(map[string]interface{})
 	req, err := requests.ParseRequest(oReq)
 	if err != nil {
-		wrappedErr := errors.Wrap(err, "Run poc error")
+		wrappedErr := errors.WithMessage(err, "Run poc error")
 		utils.ErrorP(wrappedErr)
 		return false, err
 	}
@@ -158,7 +158,7 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 			}
 			out, err := cel.Evaluate(env, expression, variableMap)
 			if err != nil {
-				wrappedErr := errors.Wrap(err, "Set variable error")
+				wrappedErr := errors.WithMessage(err, "Set variable error")
 				utils.ErrorP(wrappedErr)
 				continue
 			}
@@ -257,7 +257,8 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 		// 执行表达式
 		out, err := cel.Evaluate(env, rule.Expression, variableMap)
 		if err != nil {
-			return false, err
+			wrappedErr := errors.WithMessage(err, "Evalute expression error")
+			return false, wrappedErr
 		}
 
 		// 判断最后执行表达式结果
@@ -288,7 +289,7 @@ func DealWithRules(DealWithRuleFunc func(xray_structs.Rule) (bool, error), rules
 	for _, rule := range rules {
 		flag, err := DealWithRuleFunc(rule)
 		if err != nil {
-			wrappedErr := errors.Wrap(err, "Execute Rule error")
+			wrappedErr := errors.WithMessage(err, "Execute Rule error")
 			utils.ErrorP(wrappedErr)
 		}
 
@@ -331,7 +332,7 @@ func xrayNewReverse() *xray_structs.Reverse {
 		dnslogCnRequest := common_structs.DnslogCNGetDomainRequest
 		resp, err := requests.DoRequest(dnslogCnRequest, false)
 		if err != nil {
-			wrappedErr := errors.Wrap(err, "Get reverse domain error: Can't get domain from dnslog.cn")
+			wrappedErr := errors.WithMessage(err, "Get reverse domain error: Can't get domain from dnslog.cn")
 			utils.ErrorP(wrappedErr)
 			return &xray_structs.Reverse{}
 		}

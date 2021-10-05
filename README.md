@@ -3,10 +3,11 @@
 
 ## Feature
 - 支持ceye.io和dnslog.cn作为反连平台
+- 支持tag子命令为xray/nuclei的poc添加/删除tag，tag可用于筛选poc
 ## TODO
 - [x] xray
 - [ ] nuclei
-
+- [ ] 使用tag筛选poc
 ## Reference
 - [jjf012/gopoc](https://github.com/jjf012/gopoc)
 - [projectdiscovery/nuclei](https://github.com/projectdiscovery/nuclei)

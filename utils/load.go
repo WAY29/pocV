@@ -44,13 +44,17 @@ func LoadTargets(target *[]string, targetFiles *[]string) []string {
 }
 
 // 读取pocs
-func LoadPocs(pocs *[]string, pocPaths *[]string) ([]xray_structs.Poc, []nuclei_structs.Poc) {
-	xrayPocsSlice := make([]xray_structs.Poc, 0)
-	nucleiPocsSlice := make([]nuclei_structs.Poc, 0)
+func LoadPocs(pocs *[]string, pocPaths *[]string) (map[string]xray_structs.Poc, map[string]nuclei_structs.Poc) {
+	xrayPocMap := make(map[string]xray_structs.Poc)
+	NucleiPocMap := make(map[string]nuclei_structs.Poc)
 
 	// 加载poc函数
 	LoadPoc := func(pocFile string) {
 		if Exists(pocFile) && IsFile(pocFile) {
+			pocPath, err := filepath.Abs(pocFile)
+			if err != nil {
+				CliError("Get poc filepath error: "+pocFile, 4)
+			}
 			DebugF("Load poc file: %v", pocFile)
 			// 判断前三个字符
 			data, err := ReadFileN(pocFile, 3)
@@ -65,14 +69,14 @@ func LoadPocs(pocs *[]string, pocPaths *[]string) ([]xray_structs.Poc, []nuclei_
 				if nucleiPoc.ID == "" || err != nil {
 					CliError("Parse yaml error: "+pocFile, 5)
 				}
+				NucleiPocMap[pocPath] = *nucleiPoc
 
-				nucleiPocsSlice = append(nucleiPocsSlice, *nucleiPoc)
 			} else {
 				xrayPoc, err := xray_parse.ParseYaml(pocFile)
 				if xrayPoc.Name == "" || err != nil {
 					CliError("Parse yaml error: "+pocFile, 5)
 				}
-				xrayPocsSlice = append(xrayPocsSlice, *xrayPoc)
+				xrayPocMap[pocPath] = *xrayPoc
 			}
 
 		} else {
@@ -99,5 +103,5 @@ func LoadPocs(pocs *[]string, pocPaths *[]string) ([]xray_structs.Poc, []nuclei_
 
 	}
 
-	return xrayPocsSlice, nucleiPocsSlice
+	return xrayPocMap, NucleiPocMap
 }

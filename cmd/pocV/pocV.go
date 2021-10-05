@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"time"
 
 	"github.com/WAY29/pocV/internal/common/check"
+	"github.com/WAY29/pocV/internal/common/tag"
 	common_structs "github.com/WAY29/pocV/pkg/common/structs"
 	xray_requests "github.com/WAY29/pocV/pkg/xray/requests"
 	xray_structs "github.com/WAY29/pocV/pkg/xray/structs"
@@ -25,16 +25,25 @@ func cmdTag(cmd *cli.Cmd) {
 	var (
 		poc     = cmd.StringsOpt("p poc", make([]string, 0), "Poc file(s)")
 		pocPath = cmd.StringsOpt("P pocpath", make([]string, 0), "Load poc from Path")
-
-		tag = cmd.StringsArg("TAG", make([]string, 0), "poc tag")
+		tags    = cmd.StringsArg("TAG", make([]string, 0), "poc tag")
+		remove  = cmd.BoolOpt("r rm", false, "Remove tag(s) instead of add")
+		debug   = cmd.BoolOpt("debug", false, "debug this program")
+		verbose = cmd.BoolOpt("v verbose", false, "print verbose messages")
 	)
 
-	cmd.Spec = "(-p=<poc> | -P=<pocpath>)...  TAG..."
+	cmd.Spec = "[--debug] [-v | --verbose] [-r] (-p=<poc> | -P=<pocpath>)...  TAG..."
 
 	cmd.Action = func() {
-		// TODO remove this
-		xrayPocs, nucleiPocs := utils.LoadPocs(poc, pocPath)
-		fmt.Printf("TODO REMOVE: %#v %#v %#v %#v %#v\n", *poc, *pocPath, *tag, xrayPocs, nucleiPocs)
+		// 初始化日志
+		utils.InitLog(*debug, *verbose)
+
+		xrayPocMap, nucleiPocMap := utils.LoadPocs(poc, pocPath)
+
+		if *remove {
+			tag.RemoveTags(*tags, xrayPocMap, nucleiPocMap)
+		} else {
+			tag.AddTags(*tags, xrayPocMap, nucleiPocMap)
+		}
 	}
 }
 

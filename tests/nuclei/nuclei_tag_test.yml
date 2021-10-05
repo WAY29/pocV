@@ -8,7 +8,7 @@ info:
     - https://nvd.nist.gov/vuln/detail/CVE-2005-4385
   author: geeknik
   severity: medium
-  tags: cofax,xss,cve,cve2005,test
+  tags: cofax,xss,cve,cve2005,test,test2
 
 requests:
   - method: GET

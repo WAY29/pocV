@@ -174,7 +174,7 @@ func DoRequest(req *http.Request, redirect bool) (*structs.Response, error) {
 		wrappedErr := errors.Wrap(err, "Parse response error")
 		return nil, wrappedErr
 	}
-	return resp, err
+	return resp, nil
 }
 
 func ParseRequest(oReq *http.Request) (*structs.Request, error) {

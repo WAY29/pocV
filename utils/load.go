@@ -105,3 +105,26 @@ func LoadPocs(pocs *[]string, pocPaths *[]string) (map[string]xray_structs.Poc, 
 
 	return xrayPocMap, NucleiPocMap
 }
+
+func FilterPocs(tags []string, xrayPocMap map[string]xray_structs.Poc, nucleiPocMap map[string]nuclei_structs.Poc) (map[string]xray_structs.Poc, map[string]nuclei_structs.Poc) {
+
+	for k, poc := range xrayPocMap {
+		for _, tag := range tags {
+			if !strings.Contains(poc.Detail.Tags, tag) {
+				delete(xrayPocMap, k)
+				break
+			}
+		}
+	}
+
+	for k, poc := range nucleiPocMap {
+		for _, tag := range tags {
+			if !strings.Contains(poc.Info.Tags.String(), tag) {
+				delete(xrayPocMap, k)
+				break
+			}
+		}
+	}
+
+	return xrayPocMap, nucleiPocMap
+}

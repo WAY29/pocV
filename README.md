@@ -7,7 +7,7 @@
 ## TODO
 - [x] xray
 - [ ] nuclei
-- [ ] 使用tag筛选poc
+- [x] 使用tag筛选poc
 ## Reference
 - [jjf012/gopoc](https://github.com/jjf012/gopoc)
 - [projectdiscovery/nuclei](https://github.com/projectdiscovery/nuclei)

@@ -63,11 +63,11 @@ func ErrorP(err error) {
 			switch customErr.Type {
 			// case myerrors.ConvertInterfaceError:
 			// case myerrors.CompileError:
-			// default:
+			default:
+				logger.Error(fmt.Sprintf("%s: %+v", "PocV Error", err))
 			}
-			logger.Error(fmt.Sprintf("%s: %+v", "PocV Error", err))
 		default:
-			// unknown error
+			// raw error
 			logger.Error(fmt.Sprintf("%s: %+v", "Raw Error", err))
 		}
 

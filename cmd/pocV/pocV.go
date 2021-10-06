@@ -57,6 +57,7 @@ func cmdRun(cmd *cli.Cmd) {
 		pocPath     = cmd.StringsOpt("P pocpath", make([]string, 0), "Load poc from Path, support Glob grammer")
 		apiKey      = cmd.StringOpt("k key", "", "ceye.io api key")
 		domain      = cmd.StringOpt("d domain", "", "ceye.io subdomain")
+		tags        = cmd.StringsOpt("tag", make([]string, 0), "filter poc by tag")
 		threads     = cmd.IntOpt("threads", 10, "Thread number")
 		timeout     = cmd.IntOpt("timeout", 20, "Request timeout")
 		rate        = cmd.IntOpt("rate", 100, "Request rate(per second)")
@@ -65,7 +66,7 @@ func cmdRun(cmd *cli.Cmd) {
 		verbose     = cmd.BoolOpt("v verbose", false, "print verbose messages")
 	)
 	// 定义用法
-	cmd.Spec = "(-t=<target> | -T=<targetFile>)... (-p=<poc> | -P=<pocpath>)... [--threads=<threads>] [--timeout=<timeout>] [--proxy=<proxy>] [-k=<ceye.api.key> | --key=<ceye.api.key>]  [-d=<ceye.subdomain> | --domain=<ceye.subdomain>] [--debug] [-v | --verbose]"
+	cmd.Spec = "(-t=<target> | -T=<targetFile>)... (-p=<poc> | -P=<pocpath>)... [--tag=<poc.tag>]... [--threads=<threads>] [--timeout=<timeout>] [--proxy=<proxy>] [-k=<ceye.api.key> | --key=<ceye.api.key>]  [-d=<ceye.subdomain> | --domain=<ceye.subdomain>] [--debug] [-v | --verbose]"
 
 	cmd.Action = func() {
 		// 设置变量
@@ -91,7 +92,9 @@ func cmdRun(cmd *cli.Cmd) {
 
 		// 加载poc
 		xrayPocs, nucleiPocs := utils.LoadPocs(poc, pocPath)
-		utils.DebugF("TODO REMOVE THIS: %#v", nucleiPocs)
+		// 过滤poc
+		xrayPocs, nucleiPocs = utils.FilterPocs(*tags, xrayPocs, nucleiPocs)
+		utils.DebugF("TODO REMOVE THIS: %#v %#v", xrayPocs, nucleiPocs)
 
 		// 检查
 

@@ -19,3 +19,10 @@ func Failure(message string) {
 func FailureF(message string, args ...interface{}) {
 	color.Println("<red>[-]</> " + fmt.Sprintf(message, args...))
 }
+
+func Exit(message string) {
+	color.Println("<red>[-]</> " + message)
+}
+func ExitF(message string, args ...interface{}) {
+	color.Println("<red>[-]</> " + fmt.Sprintf(message, args...))
+}

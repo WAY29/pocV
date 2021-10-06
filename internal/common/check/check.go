@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
+	"github.com/WAY29/pocV/internal/common/errors"
 
 	common_structs "github.com/WAY29/pocV/pkg/common/structs"
 	nuclei_structs "github.com/WAY29/pocV/pkg/nuclei/structs"
@@ -81,8 +81,8 @@ func check(taskInterface interface{}) {
 	case *xray_structs.Task:
 		task, ok := taskInterface.(*xray_structs.Task)
 		if !ok {
-			err := errors.New(fmt.Sprintf("Can't convert task interface: %#v", taskInterface))
-			utils.ErrorP(err)
+			wrappedErr := errors.Newf(errors.ConvertInterfaceError, "Can't convert task interface: %#v", err)
+			utils.ErrorP(wrappedErr)
 			return
 		}
 		target, poc := task.Target, task.Poc
@@ -93,8 +93,8 @@ func check(taskInterface interface{}) {
 	case *nuclei_structs.Task:
 		task, ok := taskInterface.(*nuclei_structs.Task)
 		if !ok {
-			err := errors.New(fmt.Sprintf("Can't convert task interface: %#v", taskInterface))
-			utils.ErrorP(err)
+			wrappedErr := errors.Newf(errors.ConvertInterfaceError, "Can't convert task interface: %#v", err)
+			utils.ErrorP(wrappedErr)
 			return
 		}
 		target, poc := task.Target, task.Poc
@@ -102,7 +102,7 @@ func check(taskInterface interface{}) {
 	}
 
 	if err != nil {
-		wrappedErr := errors.WithMessagef(err, "Run Poc (%v) error", pocName)
+		wrappedErr := errors.Wrapf(err, "Run Poc (%v) error", pocName)
 		utils.ErrorP(wrappedErr)
 		return
 	}
@@ -133,7 +133,7 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 	env, err := cel.NewEnv(&c)
 
 	if err != nil {
-		wrappedErr := errors.WithMessage(err, "Environment creation error")
+		wrappedErr := errors.Wrap(err, "Environment creation error")
 		utils.ErrorP(wrappedErr)
 		return false, err
 	}
@@ -141,7 +141,7 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 	variableMap := make(map[string]interface{})
 	req, err := requests.ParseRequest(oReq)
 	if err != nil {
-		wrappedErr := errors.WithMessage(err, "Run poc error")
+		wrappedErr := errors.Wrapf(err, "Run poc (%v) error", p.Name)
 		utils.ErrorP(wrappedErr)
 		return false, err
 	}
@@ -158,7 +158,7 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 			}
 			out, err := cel.Evaluate(env, expression, variableMap)
 			if err != nil {
-				wrappedErr := errors.WithMessage(err, "Set variable error")
+				wrappedErr := errors.Wrap(err, "Set variable error")
 				utils.ErrorP(wrappedErr)
 				continue
 			}
@@ -257,7 +257,7 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 		// 执行表达式
 		out, err := cel.Evaluate(env, rule.Expression, variableMap)
 		if err != nil {
-			wrappedErr := errors.WithMessage(err, "Evalute expression error")
+			wrappedErr := errors.Wrap(err, "Evalute expression error")
 			return false, wrappedErr
 		}
 
@@ -289,7 +289,7 @@ func DealWithRules(DealWithRuleFunc func(xray_structs.Rule) (bool, error), rules
 	for _, rule := range rules {
 		flag, err := DealWithRuleFunc(rule)
 		if err != nil {
-			wrappedErr := errors.WithMessage(err, "Execute Rule error")
+			wrappedErr := errors.Wrap(err, "Execute Rule error")
 			utils.ErrorP(wrappedErr)
 		}
 
@@ -332,7 +332,7 @@ func xrayNewReverse() *xray_structs.Reverse {
 		dnslogCnRequest := common_structs.DnslogCNGetDomainRequest
 		resp, err := requests.DoRequest(dnslogCnRequest, false)
 		if err != nil {
-			wrappedErr := errors.WithMessage(err, "Get reverse domain error: Can't get domain from dnslog.cn")
+			wrappedErr := errors.Wrap(err, "Get reverse domain error: Can't get domain from dnslog.cn")
 			utils.ErrorP(wrappedErr)
 			return &xray_structs.Reverse{}
 		}

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
+	"github.com/WAY29/pocV/internal/common/errors"
 
 	common_structs "github.com/WAY29/pocV/pkg/common/structs"
 	"github.com/WAY29/pocV/pkg/xray/requests"
@@ -38,19 +38,19 @@ func Evaluate(env *cel.Env, expression string, params map[string]interface{}) (r
 	ast, iss := env.Compile(expression)
 	err := iss.Err()
 	if err != nil {
-		wrappedErr := errors.Wrap(err, "Compile error")
+		wrappedErr := errors.Newf(errors.CompileError, "Compile error: %v", err)
 		return nil, wrappedErr
 	}
 
 	prg, err := env.Program(ast)
 	if err != nil {
-		wrappedErr := errors.Wrap(err, "Program creation error")
+		wrappedErr := errors.Newf(errors.ProgramCreationError, "Program creation error: %v", err)
 		return nil, wrappedErr
 	}
 
 	out, _, err := prg.Eval(params)
 	if err != nil {
-		wrappedErr := errors.Wrap(err, "Evaluation error")
+		wrappedErr := errors.Newf(errors.EvaluationError, "Evaluation error: %v", err)
 		return nil, wrappedErr
 	}
 	return out, nil
@@ -441,7 +441,7 @@ func reverseCheck(r *structs.Reverse, timeout int64) bool {
 		req, _ := http.NewRequest("GET", urlStr, nil)
 		resp, err := requests.DoRequest(req, false)
 		if err != nil {
-			wrappedErr := errors.WithMessage(err, "Reverse check error")
+			wrappedErr := errors.Wrap(err, "Reverse check error")
 			utils.ErrorP(wrappedErr)
 			return false
 		}
@@ -456,7 +456,7 @@ func reverseCheck(r *structs.Reverse, timeout int64) bool {
 		sub := strings.Split(r.Domain, ".")[0]
 		resp, err := requests.DoRequest(common_structs.DnslogCNGetRecordRequest, false)
 		if err != nil {
-			wrappedErr := errors.WithMessage(err, "Reverse check error")
+			wrappedErr := errors.Wrap(err, "Reverse check error")
 			utils.ErrorP(wrappedErr)
 			return false
 		}

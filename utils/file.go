@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pkg/errors"
+	"github.com/WAY29/pocV/internal/common/errors"
 )
 
 // 判断所给路径文件/文件夹是否存在
@@ -45,7 +45,7 @@ func ReadFileAsLine(path string) ([]string, error) {
 	}
 	file, err := os.OpenFile(path, os.O_RDWR, 0666)
 	if err != nil {
-		wrappedErr := errors.Wrapf(err, "Open file %s error", path)
+		wrappedErr := errors.Newf(errors.FileError, "Open file %s error", path)
 		return nil, wrappedErr
 	}
 
@@ -58,7 +58,7 @@ func ReadFileAsLine(path string) ([]string, error) {
 			if err == io.EOF {
 				break
 			} else {
-				wrappedErr := errors.Wrapf(err, "Read file %s error", path)
+				wrappedErr := errors.Newf(errors.FileError, "Read file %s error", path)
 				return nil, wrappedErr
 			}
 		}
@@ -72,12 +72,12 @@ func ReadFileN(path string, n int) ([]byte, error) {
 	data := make([]byte, n)
 
 	if !IsFile(path) {
-		wrappedErr := errors.Wrapf(os.ErrNotExist, "File %s not found", path)
+		wrappedErr := errors.Newf(errors.FileNotFoundError, "File %s not found", path)
 		return nil, wrappedErr
 	}
 	file, err := os.OpenFile(path, os.O_RDWR, 0666)
 	if err != nil {
-		wrappedErr := errors.Wrapf(os.ErrNotExist, "Open file %s error", path)
+		wrappedErr := errors.Newf(errors.FileError, "Open file %s error", path)
 		return nil, wrappedErr
 	}
 

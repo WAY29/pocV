@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/WAY29/errors"
+	myerrors "github.com/WAY29/pocV/internal/common/errors"
 	"github.com/sirupsen/logrus"
 	prefixed "github.com/x-cray/logrus-prefixed-formatter"
 )
@@ -56,7 +58,19 @@ func Error(args ...interface{}) {
 func ErrorP(err error) {
 	// print stack trace if debug
 	if DebugFlag {
-		logger.Error(fmt.Sprintf("%+v", err))
+		switch customErr := errors.Cause(err).(type) {
+		case myerrors.CustomError:
+			switch customErr.Type {
+			// case myerrors.ConvertInterfaceError:
+			// case myerrors.CompileError:
+			// default:
+			}
+			logger.Error(fmt.Sprintf("%s: %+v", "PocV Error", err))
+		default:
+			// unknown error
+			logger.Error(fmt.Sprintf("%s: %+v", "Raw Error", err))
+		}
+
 	} else {
 		logger.Error(fmt.Sprintf("%v", err))
 	}

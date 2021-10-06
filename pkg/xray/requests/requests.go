@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/pkg/errors"
+	"github.com/WAY29/pocV/internal/common/errors"
 
 	"github.com/WAY29/pocV/pkg/xray/structs"
 	"github.com/WAY29/pocV/utils"
@@ -49,7 +49,7 @@ func InitHttpClient(ThreadsNum int, DownProxy string, Timeout time.Duration) err
 	if DownProxy != "" {
 		u, err := url.Parse(DownProxy)
 		if err != nil {
-			wrappedErr := errors.Wrap(err, "Parse Proxy error")
+			wrappedErr := errors.Newf(errors.ProxyError, "Parse Proxy error: %v", err)
 			return wrappedErr
 		}
 		tr.Proxy = http.ProxyURL(u)
@@ -166,12 +166,12 @@ func DoRequest(req *http.Request, redirect bool) (*structs.Response, error) {
 		defer oResp.Body.Close()
 	}
 	if err != nil {
-		wrappedErr := errors.Wrap(err, "Request error")
+		wrappedErr := errors.Newf(errors.RequestError, "Request error: %v", err)
 		return nil, wrappedErr
 	}
 	resp, err := ParseResponse(oResp)
 	if err != nil {
-		wrappedErr := errors.Wrap(err, "Parse response error")
+		wrappedErr := errors.Newf(errors.ResponseError, "Parse response error: %v", err)
 		return nil, wrappedErr
 	}
 	return resp, nil
@@ -191,7 +191,7 @@ func ParseRequest(oReq *http.Request) (*structs.Request, error) {
 	} else {
 		data, err := ioutil.ReadAll(oReq.Body)
 		if err != nil {
-			wrappedErr := errors.Wrap(err, "Get request body error")
+			wrappedErr := errors.Newf(errors.RequestError, "Get request error: %v", err)
 			return nil, wrappedErr
 		}
 		req.Body = data
@@ -212,8 +212,7 @@ func ParseResponse(oResp *http.Response) (*structs.Response, error) {
 	resp.ContentType = oResp.Header.Get("Content-Type")
 	body, err := getRespBody(oResp)
 	if err != nil {
-		wrappedErr := errors.Wrap(err, "Get response body error")
-		return nil, wrappedErr
+		return nil, err
 	}
 	resp.Body = body
 	return &resp, nil
@@ -238,7 +237,7 @@ func getRespBody(oResp *http.Response) ([]byte, error) {
 	} else {
 		raw, err := ioutil.ReadAll(oResp.Body)
 		if err != nil {
-			wrappedErr := errors.Wrap(err, "Get response body error")
+			wrappedErr := errors.Newf(errors.ResponseError, "Get response body error: %v", err)
 			return nil, wrappedErr
 		}
 		body = raw

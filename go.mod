@@ -3,11 +3,11 @@ module github.com/WAY29/pocV
 go 1.17
 
 require (
+	github.com/WAY29/errors v1.2.0
 	github.com/google/cel-go v0.8.0
 	github.com/gookit/color v1.4.2
 	github.com/jawher/mow.cli v1.2.0
 	github.com/panjf2000/ants v1.3.0
-	github.com/pkg/errors v0.9.1
 	github.com/projectdiscovery/nuclei/v2 v2.5.2
 	github.com/sirupsen/logrus v1.8.1
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2
@@ -63,6 +63,7 @@ require (
 	github.com/onsi/ginkgo v1.16.4 // indirect
 	github.com/onsi/gomega v1.16.0 // indirect
 	github.com/owenrumney/go-sarif v1.0.11 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/projectdiscovery/blackrock v0.0.0-20210415162320-b38689ae3a2e // indirect
 	github.com/projectdiscovery/clistats v0.0.8 // indirect
 	github.com/projectdiscovery/cryptoutil v0.0.0-20210805184155-b5d2512f9345 // indirect

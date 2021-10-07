@@ -3,7 +3,7 @@ module github.com/WAY29/pocV
 go 1.17
 
 require (
-	github.com/WAY29/errors v1.2.0
+	github.com/WAY29/errors v1.3.0
 	github.com/google/cel-go v0.8.0
 	github.com/gookit/color v1.4.2
 	github.com/jawher/mow.cli v1.2.0

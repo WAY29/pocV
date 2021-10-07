@@ -4,6 +4,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/WAY29/errors"
 	"github.com/WAY29/pocV/internal/common/check"
 	"github.com/WAY29/pocV/internal/common/tag"
 	common_structs "github.com/WAY29/pocV/pkg/common/structs"
@@ -104,6 +105,11 @@ func cmdRun(cmd *cli.Cmd) {
 		check.Wait()
 		check.End()
 	}
+}
+
+func init() {
+	errors.SetCurrentAbsPath()
+	errors.SetSkipFrameNum(4)
 }
 
 func main() {

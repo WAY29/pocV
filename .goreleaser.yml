@@ -8,8 +8,6 @@ builds:
       goarch:
         - amd64
         - 386
-        - arm
-        - arm64
 
 archives:
     - id: tgz

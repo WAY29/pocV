@@ -24,10 +24,10 @@ type Detail struct {
 
 // Rules 和 Groups 只能存在一个
 type Poc struct {
-	Params []string          `yaml:"params"`
 	Name   string            `yaml:"name"`
 	Set    yaml.MapSlice     `yaml:"set"`
 	Rules  []Rule            `yaml:"rules"`
 	Groups map[string][]Rule `yaml:"groups"`
+	Params []string          `yaml:"params"`
 	Detail Detail            `yaml:"detail"`
 }

@@ -5,13 +5,18 @@ import (
 	"time"
 
 	"github.com/WAY29/errors"
+	cli "github.com/jawher/mow.cli"
+
 	"github.com/WAY29/pocV/internal/common/check"
+	. "github.com/WAY29/pocV/internal/common/load"
+	"github.com/WAY29/pocV/internal/common/output"
 	"github.com/WAY29/pocV/internal/common/tag"
+	"github.com/WAY29/pocV/utils"
+
 	common_structs "github.com/WAY29/pocV/pkg/common/structs"
+	nuclei_parse "github.com/WAY29/pocV/pkg/nuclei/parse"
 	xray_requests "github.com/WAY29/pocV/pkg/xray/requests"
 	xray_structs "github.com/WAY29/pocV/pkg/xray/structs"
-	"github.com/WAY29/pocV/utils"
-	cli "github.com/jawher/mow.cli"
 )
 
 const (
@@ -38,7 +43,10 @@ func cmdTag(cmd *cli.Cmd) {
 		// 初始化日志
 		utils.InitLog(*debug, *verbose)
 
-		xrayPocMap, nucleiPocMap := utils.LoadPocs(poc, pocPath)
+		// 初始化nuclei options
+		nuclei_parse.InitExecuterOptions(100, 10)
+
+		xrayPocMap, nucleiPocMap := LoadPocs(poc, pocPath)
 
 		if *remove {
 			tag.RemoveTags(*tags, xrayPocMap, nucleiPocMap)
@@ -59,15 +67,17 @@ func cmdRun(cmd *cli.Cmd) {
 		apiKey      = cmd.StringOpt("k key", "", "ceye.io api key")
 		domain      = cmd.StringOpt("d domain", "", "ceye.io subdomain")
 		tags        = cmd.StringsOpt("tag", make([]string, 0), "filter poc by tag")
+		file        = cmd.StringOpt("file", "", "Result file to write")
+		json        = cmd.BoolOpt("json", false, "Whether output is in JSON format or not, more information will be output")
+		proxy       = cmd.StringOpt("proxy", "", "Http proxy")
 		threads     = cmd.IntOpt("threads", 10, "Thread number")
 		timeout     = cmd.IntOpt("timeout", 20, "Request timeout")
 		rate        = cmd.IntOpt("rate", 100, "Request rate(per second)")
-		proxy       = cmd.StringOpt("proxy", "", "http proxy")
-		debug       = cmd.BoolOpt("debug", false, "debug this program")
-		verbose     = cmd.BoolOpt("v verbose", false, "print verbose messages")
+		debug       = cmd.BoolOpt("debug", false, "Debug this program")
+		verbose     = cmd.BoolOpt("v verbose", false, "Print verbose messages")
 	)
 	// 定义用法
-	cmd.Spec = "(-t=<target> | -T=<targetFile>)... (-p=<poc> | -P=<pocpath>)... [--tag=<poc.tag>]... [--threads=<threads>] [--timeout=<timeout>] [--proxy=<proxy>] [-k=<ceye.api.key> | --key=<ceye.api.key>]  [-d=<ceye.subdomain> | --domain=<ceye.subdomain>] [--debug] [-v | --verbose]"
+	cmd.Spec = "(-t=<target> | -T=<targetFile>)... (-p=<poc> | -P=<pocpath>)... [--tag=<poc.tag>]... [--file=<file> [--json]] [--proxy=<proxy>] [--threads=<threads>] [--timeout=<timeout>] [-k=<ceye.api.key> | --key=<ceye.api.key>]  [-d=<ceye.subdomain> | --domain=<ceye.subdomain>] [--debug] [-v | --verbose]"
 
 	cmd.Action = func() {
 		// 设置变量
@@ -88,22 +98,33 @@ func cmdRun(cmd *cli.Cmd) {
 		// 初始化http客户端
 		xray_requests.InitHttpClient(*threads, *proxy, timeoutSecond)
 
+		// 初始化nuclei options
+		nuclei_parse.InitExecuterOptions(*rate, *timeout)
+
 		// 加载目标
-		targets := utils.LoadTargets(target, targetFiles)
+		targets := LoadTargets(target, targetFiles)
 
 		// 加载poc
-		xrayPocs, nucleiPocs := utils.LoadPocs(poc, pocPath)
+		xrayPocs, nucleiPocs := LoadPocs(poc, pocPath)
 		// 过滤poc
-		xrayPocs, nucleiPocs = utils.FilterPocs(*tags, xrayPocs, nucleiPocs)
-		utils.DebugF("TODO REMOVE THIS: %#v %#v", xrayPocs, nucleiPocs)
+		xrayPocs, nucleiPocs = FilterPocs(*tags, xrayPocs, nucleiPocs)
+		// utils.DebugF("TODO REMOVE THIS: %#v %#v", xrayPocs, nucleiPocs)
 
-		// 检查
+		// 初始化输出
+		outputChannel, outputWg := output.InitOutput(*file, *json)
 
 		// 初始化check
 		check.InitCheck(*threads, *rate, *verbose)
-		check.Start(targets, xrayPocs, nucleiPocs)
+
+		// check开始
+		check.Start(targets, xrayPocs, nucleiPocs, outputChannel)
 		check.Wait()
+
+		// check结束
+		close(outputChannel)
 		check.End()
+		outputWg.Wait()
+
 	}
 }
 

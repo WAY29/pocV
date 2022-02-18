@@ -25,7 +25,7 @@ func TestRuleParse(t *testing.T) {
 			Tags: "test",
 		},
 	}
-	poc, err := ParseYaml("../../../tests/xray/rule_test.yml")
+	poc, err := ParsePoc("../../../tests/xray/rule_test.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestGroupParse(t *testing.T) {
 			Tags: "test",
 		},
 	}
-	poc, err := ParseYaml("../../../tests/xray/group_test.yml")
+	poc, err := ParsePoc("../../../tests/xray/group_test.yml")
 	if err != nil {
 		t.Fatal(err)
 	}

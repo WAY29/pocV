@@ -30,6 +30,7 @@ func removeTag(beforeTag string, tag string) string {
 	}
 }
 
+// 为poc添加标签
 func AddTags(tags []string, xrayPocMap map[string]xray_structs.Poc, nucleiPocMap map[string]nuclei_structs.Poc) {
 	for _, tag := range tags {
 		for pocPath, poc := range xrayPocMap {
@@ -38,12 +39,13 @@ func AddTags(tags []string, xrayPocMap map[string]xray_structs.Poc, nucleiPocMap
 				poc.Detail.Tags = addTag(pocTags, tag)
 				out, err := yaml.Marshal(poc)
 				if err != nil {
-					utils.CliError("Can't Marshal poc: "+poc.Name, 7)
+					utils.CliError("Can't Marshal poc: "+poc.Name, 2)
 				}
 				err = utils.WriteFile(pocPath, out)
 				if err != nil {
-					utils.CliError("Can't write file: "+pocPath, 8)
+					utils.CliError("Can't write file: "+pocPath, 3)
 				}
+				utils.SuccessF("%s: Add [%s] Tag", poc.Name, tag)
 			}
 		}
 		for pocPath, poc := range nucleiPocMap {
@@ -54,18 +56,20 @@ func AddTags(tags []string, xrayPocMap map[string]xray_structs.Poc, nucleiPocMap
 				}
 				out, err := yaml.Marshal(poc)
 				if err != nil {
-					utils.CliError("Can't Marshal poc: "+poc.ID, 7)
+					utils.CliError("Can't Marshal poc: "+poc.ID, 2)
 				}
 				err = utils.WriteFile(pocPath, out)
 				if err != nil {
-					utils.CliError("Can't write file: "+pocPath, 8)
+					utils.CliError("Can't write file: "+pocPath, 3)
 				}
+				utils.SuccessF("%s: Add [%s] Tag", poc.ID, tag)
 			}
 		}
 	}
 
 }
 
+// 为poc移除标签
 func RemoveTags(tags []string, xrayPocMap map[string]xray_structs.Poc, nucleiPocMap map[string]nuclei_structs.Poc) {
 	for _, tag := range tags {
 		for pocPath, poc := range xrayPocMap {
@@ -74,28 +78,32 @@ func RemoveTags(tags []string, xrayPocMap map[string]xray_structs.Poc, nucleiPoc
 				poc.Detail.Tags = removeTag(pocTags, tag)
 				out, err := yaml.Marshal(poc)
 				if err != nil {
-					utils.CliError("Can't Marshal poc: "+poc.Name, 7)
+					utils.CliError("Can't Marshal poc: "+poc.Name, 2)
 				}
 				err = utils.WriteFile(pocPath, out)
 				if err != nil {
-					utils.CliError("Can't write file: "+pocPath, 8)
+					utils.CliError("Can't write file: "+pocPath, 3)
 				}
+				utils.SuccessF("%s: Remove [%s] Tag", poc.Name, tag)
 			}
 		}
+		// nuclei tag 不区分大小写
 		for pocPath, poc := range nucleiPocMap {
 			pocTags := poc.Info.Tags.String()
+			tag = strings.ToLower(tag)
 			if strings.Contains(pocTags, tag) {
 				poc.Info.Tags = stringslice.StringSlice{
 					Value: removeTag(pocTags, tag),
 				}
 				out, err := yaml.Marshal(poc)
 				if err != nil {
-					utils.CliError("Can't Marshal poc: "+poc.ID, 7)
+					utils.CliError("Can't Marshal poc: "+poc.ID, 2)
 				}
 				err = utils.WriteFile(pocPath, out)
 				if err != nil {
-					utils.CliError("Can't write file: "+pocPath, 8)
+					utils.CliError("Can't write file: "+pocPath, 3)
 				}
+				utils.SuccessF("%s: Remove [%s] Tag", poc.ID, tag)
 			}
 		}
 	}

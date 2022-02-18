@@ -3,26 +3,26 @@ package utils
 import (
 	"fmt"
 
-	"github.com/gookit/color"
+	. "github.com/logrusorgru/aurora"
 )
 
 func Success(message string) {
-	color.Println("<cyan>[+]</> " + message)
+	fmt.Println(Cyan("[+]"), message)
 }
 func SuccessF(message string, args ...interface{}) {
-	color.Println("<cyan>[+]</> " + fmt.Sprintf(message, args...))
+	fmt.Println(Cyan("[+]"), fmt.Sprintf(message, args...))
 }
 
 func Failure(message string) {
-	color.Println("<red>[-]</> " + message)
+	fmt.Println(Red("[-]"), message)
 }
 func FailureF(message string, args ...interface{}) {
-	color.Println("<red>[-]</> " + fmt.Sprintf(message, args...))
+	fmt.Println(Red("[-]"), fmt.Sprintf(message, args...))
 }
 
 func Exit(message string) {
-	color.Println("<red>[-]</> " + message)
+	fmt.Println(Red("[-]"), message)
 }
 func ExitF(message string, args ...interface{}) {
-	color.Println("<red>[-]</> " + fmt.Sprintf(message, args...))
+	fmt.Println(Red("[-]"), fmt.Sprintf(message, args...))
 }

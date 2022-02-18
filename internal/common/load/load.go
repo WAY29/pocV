@@ -9,6 +9,8 @@ import (
 	nuclei_structs "github.com/WAY29/pocV/pkg/nuclei/structs"
 	xray_parse "github.com/WAY29/pocV/pkg/xray/parse"
 	xray_structs "github.com/WAY29/pocV/pkg/xray/structs"
+
+	"github.com/WAY29/pocV/utils"
 )
 
 // 读取目标
@@ -19,16 +21,16 @@ func LoadTargets(target *[]string, targetFiles *[]string) []string {
 	}
 
 	for _, targetFile := range *targetFiles {
-		if Exists(targetFile) && IsFile(targetFile) {
-			DebugF("Load target file: %v", targetFile)
+		if utils.Exists(targetFile) && utils.IsFile(targetFile) {
+			utils.DebugF("Load target file: %v", targetFile)
 
-			lineSlice, err := ReadFileAsLine(targetFile)
+			lineSlice, err := utils.ReadFileAsLine(targetFile)
 			if err != nil {
-				CliError("Read target file error: "+err.Error(), 2)
+				utils.CliError("Read target file error: "+err.Error(), 2)
 			}
 			targetsSlice = append(targetsSlice, lineSlice...)
 		} else {
-			WarningF("Target file not found: %v", targetFile)
+			utils.WarningF("Target file not found: %v", targetFile)
 		}
 	}
 
@@ -36,7 +38,7 @@ func LoadTargets(target *[]string, targetFiles *[]string) []string {
 	for _, target := range targetsSlice {
 		_, err := url.ParseRequestURI(target)
 		if err != nil {
-			CliError("Target invalid: "+target, 3)
+			utils.CliError("Target invalid: "+target, 3)
 		}
 	}
 
@@ -46,41 +48,35 @@ func LoadTargets(target *[]string, targetFiles *[]string) []string {
 // 读取pocs
 func LoadPocs(pocs *[]string, pocPaths *[]string) (map[string]xray_structs.Poc, map[string]nuclei_structs.Poc) {
 	xrayPocMap := make(map[string]xray_structs.Poc)
-	NucleiPocMap := make(map[string]nuclei_structs.Poc)
+	nucleiPocMap := make(map[string]nuclei_structs.Poc)
 
 	// 加载poc函数
 	LoadPoc := func(pocFile string) {
-		if Exists(pocFile) && IsFile(pocFile) {
+		if utils.Exists(pocFile) && utils.IsFile(pocFile) {
 			pocPath, err := filepath.Abs(pocFile)
 			if err != nil {
-				CliError("Get poc filepath error: "+pocFile, 4)
+				utils.CliError("Get poc filepath error: "+pocFile, 4)
 			}
-			DebugF("Load poc file: %v", pocFile)
-			// 判断前三个字符
-			data, err := ReadFileN(pocFile, 3)
+			utils.DebugF("Load poc file: %v", pocFile)
+
+			xrayPoc, err := xray_parse.ParsePoc(pocPath)
+			if err == nil {
+				xrayPocMap[pocPath] = *xrayPoc
+				return
+			}
+			nucleiPoc, err := nuclei_parse.ParsePoc(pocPath)
+
+			if err == nil {
+				nucleiPocMap[pocPath] = *nucleiPoc
+				return
+			}
 
 			if err != nil {
-				CliError("Read poc file error: "+pocFile, 4)
-			}
-
-			// 如果是id: 则为nuclei
-			if string(data) == "id:" {
-				nucleiPoc, err := nuclei_parse.ParseYaml(pocFile)
-				if nucleiPoc.ID == "" || err != nil {
-					CliError("Parse yaml error: "+pocFile, 5)
-				}
-				NucleiPocMap[pocPath] = *nucleiPoc
-
-			} else {
-				xrayPoc, err := xray_parse.ParseYaml(pocFile)
-				if xrayPoc.Name == "" || err != nil {
-					CliError("Parse yaml error: "+pocFile, 5)
-				}
-				xrayPocMap[pocPath] = *xrayPoc
+				utils.ErrorP(err)
 			}
 
 		} else {
-			WarningF("Poc file not found: %v", pocFile)
+			utils.WarningF("Poc file not found: %v", pocFile)
 		}
 	}
 
@@ -88,11 +84,11 @@ func LoadPocs(pocs *[]string, pocPaths *[]string) (map[string]xray_structs.Poc, 
 		LoadPoc(pocFile)
 	}
 	for _, pocPath := range *pocPaths {
-		DebugF("Load from poc path: %v", pocPath)
+		utils.DebugF("Load from poc path: %v", pocPath)
 
 		pocFiles, err := filepath.Glob(pocPath)
 		if err != nil {
-			CliError("Path glob match error: "+err.Error(), 6)
+			utils.CliError("Path glob match error: "+err.Error(), 6)
 		}
 		for _, pocFile := range pocFiles {
 			// 只解析yml或yaml文件
@@ -103,7 +99,7 @@ func LoadPocs(pocs *[]string, pocPaths *[]string) (map[string]xray_structs.Poc, 
 
 	}
 
-	return xrayPocMap, NucleiPocMap
+	return xrayPocMap, nucleiPocMap
 }
 
 func FilterPocs(tags []string, xrayPocMap map[string]xray_structs.Poc, nucleiPocMap map[string]nuclei_structs.Poc) (map[string]xray_structs.Poc, map[string]nuclei_structs.Poc) {
@@ -117,9 +113,10 @@ func FilterPocs(tags []string, xrayPocMap map[string]xray_structs.Poc, nucleiPoc
 		}
 	}
 
+	// nuclei tag 不区分大小写
 	for k, poc := range nucleiPocMap {
 		for _, tag := range tags {
-			if !strings.Contains(poc.Info.Tags.String(), tag) {
+			if !strings.Contains(poc.Info.Tags.String(), strings.ToLower(tag)) {
 				delete(xrayPocMap, k)
 				break
 			}

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/WAY29/pocV/internal/common/errors"
-
 	common_structs "github.com/WAY29/pocV/pkg/common/structs"
 	nuclei_structs "github.com/WAY29/pocV/pkg/nuclei/structs"
 	"github.com/WAY29/pocV/pkg/xray/cel"
@@ -18,16 +17,22 @@ import (
 	"github.com/WAY29/pocV/pkg/xray/structs"
 	xray_structs "github.com/WAY29/pocV/pkg/xray/structs"
 	"github.com/WAY29/pocV/utils"
+
 	"github.com/panjf2000/ants"
+	"github.com/projectdiscovery/nuclei/v2/pkg/output"
 )
 
 var (
 	Ticker    *time.Ticker
 	WaitGroup sync.WaitGroup
 	Pool      *ants.PoolWithFunc
-	Verbose   bool
+
+	Verbose bool
+
+	OutputChannel chan common_structs.Result
 )
 
+// 初始化协程池
 func InitCheck(threads, rate int, verbose bool) {
 	var err error
 
@@ -35,13 +40,17 @@ func InitCheck(threads, rate int, verbose bool) {
 	Ticker = time.NewTicker(rateLimit)
 	Pool, err = ants.NewPoolWithFunc(threads, check)
 	if err != nil {
-		utils.CliError("Initialize goroutine pool error: "+err.Error(), 7)
+		utils.CliError("Initialize goroutine pool error: "+err.Error(), 2)
 	}
 
 	Verbose = verbose
 }
 
-func Start(targets []string, xrayPocMap map[string]xray_structs.Poc, nucleiPocMap map[string]nuclei_structs.Poc) {
+// 将任务放入协程池
+func Start(targets []string, xrayPocMap map[string]xray_structs.Poc, nucleiPocMap map[string]nuclei_structs.Poc, outputChannel chan common_structs.Result) {
+	// 设置outputChannel
+	OutputChannel = outputChannel
+
 	for _, target := range targets {
 		for _, poc := range xrayPocMap {
 			WaitGroup.Add(1)
@@ -60,19 +69,23 @@ func Start(targets []string, xrayPocMap map[string]xray_structs.Poc, nucleiPocMa
 	}
 }
 
+// 等待协程池
 func Wait() {
 	WaitGroup.Wait()
 }
 
+// 释放协程池
 func End() {
 	Pool.Release()
 }
 
+// 核心代码，poc检测
 func check(taskInterface interface{}) {
-	var isVul bool
-	var err error
-	var target string
-	var pocName string
+	var (
+		isVul   bool
+		err     error
+		pocName string
+	)
 
 	defer WaitGroup.Done()
 	<-Ticker.C
@@ -86,11 +99,34 @@ func check(taskInterface interface{}) {
 			return
 		}
 		target, poc := task.Target, task.Poc
-		pocName = poc.Name
 
+		pocName = poc.Name
 		req, _ := http.NewRequest("GET", target, nil)
+
 		isVul, err = executeXrayPoc(req, &poc)
+		if err != nil {
+			wrappedErr := errors.Wrapf(err, "Run Xray Poc (%v) error", pocName)
+			utils.ErrorP(wrappedErr)
+			return
+		}
+
+		OutputChannel <- &common_structs.PocResult{
+			Str:            fmt.Sprintf("%s (%s)", target, pocName),
+			Success:        isVul,
+			URL:            target,
+			PocName:        poc.Name,
+			PocLink:        poc.Detail.Links,
+			PocAuthor:      poc.Detail.Author,
+			PocDescription: poc.Detail.Description,
+		}
+
 	case *nuclei_structs.Task:
+		var (
+			desc    string
+			author  string
+			authors []string
+		)
+
 		task, ok := taskInterface.(*nuclei_structs.Task)
 		if !ok {
 			wrappedErr := errors.Newf(errors.ConvertInterfaceError, "Can't convert task interface: %#v", err)
@@ -98,25 +134,60 @@ func check(taskInterface interface{}) {
 			return
 		}
 		target, poc := task.Target, task.Poc
-		isVul, err = executeNucleiPoc(target, &poc)
+		authors, ok = poc.Info.Authors.Value.([]string)
+		if !ok {
+			author = "Unknown"
+		} else {
+			author = strings.Join(authors, ", ")
+		}
+
+		results, isVul, err := executeNucleiPoc(target, &poc)
+		if err != nil {
+			wrappedErr := errors.Wrapf(err, "Run Nuclei Poc (%v) error", pocName)
+			utils.ErrorP(wrappedErr)
+			return
+		}
+
+		for _, r := range results {
+			if r.ExtractorName != "" {
+				desc = r.TemplateID + ":" + r.ExtractorName
+			} else if r.MatcherName != "" {
+				desc = r.TemplateID + ":" + r.MatcherName
+			}
+
+			OutputChannel <- &common_structs.PocResult{
+				Str:            fmt.Sprintf("%s (%s) ", r.Matched, r.TemplateID),
+				Success:        isVul,
+				URL:            r.Matched,
+				PocName:        r.TemplateID,
+				PocLink:        []string{},
+				PocAuthor:      author,
+				PocDescription: desc,
+			}
+		}
 	}
 
-	if err != nil {
-		wrappedErr := errors.Wrapf(err, "Run Poc (%v) error", pocName)
-		utils.ErrorP(wrappedErr)
-		return
-	}
-	if isVul {
-		utils.SuccessF("%s (%s)", target, pocName)
-	} else if Verbose {
-		utils.FailureF("%s (%s)", target, pocName)
-	}
 }
 
-func executeNucleiPoc(target string, poc *nuclei_structs.Poc) (bool, error) {
-	// TODO nuclei
+func executeNucleiPoc(target string, poc *nuclei_structs.Poc) (results []*output.ResultEvent, isVul bool, err error) {
+	isVul = false
 
-	return false, nil
+	utils.DebugF("Run Nuclei Poc %s (%s)", target, poc.Info.Name)
+
+	e := poc.Executer
+	results = make([]*output.ResultEvent, 0, e.Requests())
+
+	err = e.ExecuteWithResults(target, func(result *output.InternalWrappedEvent) {
+		if len(result.Results) > 0 {
+			isVul = true
+		}
+		results = append(results, result.Results...)
+	})
+
+	if len(results) == 0 {
+		results = append(results, &output.ResultEvent{TemplateID: poc.ID, Matched: target})
+	}
+	return results, isVul, err
 }
 
 func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
@@ -125,7 +196,7 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 		oReqUrlString   = oReq.URL.String()
 	)
 
-	utils.DebugF("Run Poc [%#v] (%#v)", oReqUrlString, p.Name)
+	utils.DebugF("Run Xray Poc %s (%s)", oReqUrlString, p.Name)
 
 	c := cel.NewEnvOption()
 
@@ -284,6 +355,7 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 	return success, nil
 }
 
+// 处理xray rules组，只要其中一个不成功则失败
 func DealWithRules(DealWithRuleFunc func(xray_structs.Rule) (bool, error), rules []xray_structs.Rule) bool {
 	successFlag := false
 	for _, rule := range rules {
@@ -302,6 +374,7 @@ func DealWithRules(DealWithRuleFunc func(xray_structs.Rule) (bool, error), rules
 	return successFlag
 }
 
+// 处理xray search属性，匹配正则
 func xrayDoSearch(re string, body string) map[string]string {
 	r, err := regexp.Compile(re)
 	utils.WarningF("Regexp compile error: %v", err.Error())
@@ -322,6 +395,7 @@ func xrayDoSearch(re string, body string) map[string]string {
 	return nil
 }
 
+// xray dns反连平台 目前只支持dnslog.cn和ceye.io
 func xrayNewReverse() *xray_structs.Reverse {
 	var urlStr string
 	switch common_structs.ReversePlatformType {

@@ -11,13 +11,17 @@ import (
 )
 
 func InitOutput(file string, jsonFlag bool) (chan structs.Result, *sizedwaitgroup.SizedWaitGroup) {
+
 	outputChannel := make(chan structs.Result)
+	outputs := make([]structs.Output, 0)
 	outputWg := sizedwaitgroup.New(1)
 	outputWg.Add()
 
-	go func() {
-		defer outputWg.Done()
+	// inject StrandardOutput
+	outputs = append(outputs, &structs.StandardOutput{})
 
+	// inject FileOutput
+	if file != "" {
 		var err error
 		var f *os.File
 
@@ -26,25 +30,20 @@ func InitOutput(file string, jsonFlag bool) (chan structs.Result, *sizedwaitgrou
 			if err != nil {
 				wrappedErr := errors.Newf(errors.ConvertInterfaceError, "Can't create file '%s': %#v", file, err)
 				utils.ErrorP(wrappedErr)
+			} else {
+				outputs = append(outputs, &structs.FileOutput{F: f, Json: jsonFlag})
+
 			}
-			defer f.Close()
 		}
+
+	}
+
+	go func() {
+		defer outputWg.Done()
+
 		for result := range outputChannel {
-			var row string
-			if jsonFlag {
-				row = result.JSON()
-			} else {
-				row = result.STR()
-			}
-
-			if f != nil {
-				_, _ = f.WriteString(row + "\n")
-			}
-
-			if result.SUCCESS() {
-				utils.Success(result.STR())
-			} else {
-				utils.Failure(result.STR())
+			for _, output := range outputs {
+				output.Write(result)
 			}
 		}
 	}()

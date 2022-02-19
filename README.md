@@ -24,18 +24,18 @@ go build  -ldflags "-w -s" cmd/pocV/pocV.go
 run
 ```bash
 # 运行单个poc
-pocV run -t http://example.com -p ./test_pocs/xray/rule_test.yml
+pocV run -t http://example.com -p ./pocs/test/xray/rule_test.yml
 # 运行文件夹下多个poc
-pocV run -t http://example.com -P ./test_pocs/nuclei/*
+pocV run -t http://example.com -P ./pocs/test/nuclei/*
 # 指定多个目标
-pocV run -T target.txt -p ./test_pocs/xray/rule_test.yml
+pocV run -T target.txt -p ./pocs/test/xray/rule_test.yml
 # 通过tag过滤目标
-pocV run -T target.txt --tag test -p ./test_pocs/xray/*
+pocV run -T target.txt --tag test -p ./pocs/test/xray/*
 ```
 tag
 ```bash
 # 添加tag
-pocV tag -p ./test_pocs/nuclei/tag_test.yml newtag
+pocV tag -p ./pocs/test/nuclei/tag_test.yml newtag
 # 删除tag
-pocV tag -p ./test_pocs/nuclei/tag_test.yml -r newtag
+pocV tag -p ./pocs/test/nuclei/tag_test.yml -r newtag
 ```

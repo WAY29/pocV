@@ -19,6 +19,8 @@ message Request {
   map<string, string> headers = 3;
   string content_type = 4;
   bytes body = 5;
+  bytes raw = 6;
+  bytes raw_header = 7;
 }
 
 message Response {
@@ -27,6 +29,9 @@ message Response {
   map<string, string> headers = 3;
   string content_type = 4;
   bytes body = 5;
+  bytes raw = 6;
+  bytes raw_header = 7;
+  int64 latency = 8;
 }
 
 enum ReverseType {

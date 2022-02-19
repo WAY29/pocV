@@ -27,8 +27,10 @@ func ParsePoc(filename string) (*structs.Poc, error) {
 		return nil, err
 	}
 	if poc.Name == "" {
-		return nil, errors.New("Xray poc name can't be nil")
+		return nil, errors.Newf("Xray poc[%s] name can't be nil", filename)
 	}
-
+	if poc.Transport != "http" && poc.Transport != "" {
+		return nil, errors.Newf("Xray poc[%s] only support http poc", filename)
+	}
 	return poc, nil
 }

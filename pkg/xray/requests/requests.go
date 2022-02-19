@@ -10,25 +10,28 @@ import (
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"net/http/httptrace"
+	"net/http/httputil"
 	"net/url"
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/WAY29/pocV/internal/common/errors"
-
 	"github.com/WAY29/pocV/pkg/xray/structs"
 	"github.com/WAY29/pocV/utils"
 )
 
 var (
-	client            *http.Client
-	clientNoRedirect  *http.Client
-	dialTimout        = 5 * time.Second
-	keepAlive         = 15 * time.Second
-	XrayRequestCache  = make(map[string]*http.Request)
-	XrayResponseCache = make(map[string]*structs.Response)
+	client                 *http.Client
+	clientNoRedirect       *http.Client
+	dialTimout             = 5 * time.Second
+	keepAlive              = 15 * time.Second
+	XrayRequestCache       = make(map[string]*http.Request)
+	XrayProtoRequestCache  = make(map[string]*structs.Request)
+	XrayProtoResponseCache = make(map[string]*structs.Response)
 )
 
 func InitHttpClient(ThreadsNum int, DownProxy string, Timeout time.Duration) error {
@@ -87,7 +90,7 @@ func ParseUrl(u *url.URL) *structs.UrlType {
 	}
 }
 
-func XrayCanCluster(r, other *structs.Rule) bool {
+func XrayCanCluster(r, other *structs.RuleRequest) bool {
 	if r.Method != other.Method ||
 		r.Path != other.Path ||
 		r.Body != other.Body ||
@@ -98,8 +101,8 @@ func XrayCanCluster(r, other *structs.Rule) bool {
 	return true
 }
 
-func XrayGetRuleHash(rule *structs.Rule) string {
-	headers := rule.Headers
+func XrayGetRuleHash(req *structs.RuleRequest) string {
+	headers := req.Headers
 	keys := make([]string, len(headers))
 	headerStirng := ""
 	i := 0
@@ -112,41 +115,50 @@ func XrayGetRuleHash(rule *structs.Rule) string {
 		headerStirng += fmt.Sprintf("%s%s", k, headers[k])
 	}
 
-	return utils.MD5(fmt.Sprintf("%s%s%s%s%v", rule.Method, rule.Path, headerStirng, rule.Body, rule.FollowRedirects))
+	return utils.MD5(fmt.Sprintf("%s%s%s%s%v", req.Method, req.Path, headerStirng, req.Body, req.FollowRedirects))
 }
 
-func XraySetRequestResponseCache(rule *structs.Rule, request *http.Request, response *structs.Response) bool {
-	ruleHash := XrayGetRuleHash(rule)
+func XraySetRequestResponseCache(ruleReq *structs.RuleRequest, request *http.Request, protoRequest *structs.Request, protoResponse *structs.Response) bool {
+	ruleHash := XrayGetRuleHash(ruleReq)
 
 	if _, ok := XrayRequestCache[ruleHash]; !ok {
 		XrayRequestCache[ruleHash] = request
 	}
-	if _, ok := XrayResponseCache[ruleHash]; !ok {
-		XrayResponseCache[ruleHash] = response
-		return true
+	if _, ok := XrayProtoRequestCache[ruleHash]; !ok {
+		XrayProtoRequestCache[ruleHash] = protoRequest
+	}
+	if _, ok := XrayProtoResponseCache[ruleHash]; !ok {
+		XrayProtoResponseCache[ruleHash] = protoResponse
 	}
 
-	return false
+	return true
 }
 
-func XrayGetRequestResponseCache(rule *structs.Rule) (*http.Request, *structs.Response, bool) {
+func XrayGetRequestResponseCache(ruleReq *structs.RuleRequest) (*http.Request, *structs.Request, *structs.Response, bool) {
 	var (
-		Request  *http.Request
-		Response *structs.Response
-		ok       bool
+		Request       *http.Request
+		protoRequest  *structs.Request
+		protoResponse *structs.Response
+		ok            bool
 	)
-	ruleHash := XrayGetRuleHash(rule)
+	ruleHash := XrayGetRuleHash(ruleReq)
 
 	if Request, ok = XrayRequestCache[ruleHash]; ok {
-		if Response, ok = XrayResponseCache[ruleHash]; ok {
-			return Request, Response, true
+		if protoRequest, ok = XrayProtoRequestCache[ruleHash]; ok {
+			if protoResponse, ok = XrayProtoResponseCache[ruleHash]; ok {
+				return Request, protoRequest, protoResponse, true
+			}
 		}
 	}
-
-	return nil, nil, false
+	return nil, nil, nil, false
 }
 
-func DoRequest(req *http.Request, redirect bool) (*structs.Response, error) {
+func DoRequest(req *http.Request, redirect bool) (*http.Response, int64, error) {
+	var (
+		milliseconds int64
+		oResp        *http.Response
+		err          error
+	)
 	if req.Body == nil || req.Body == http.NoBody {
 	} else {
 		req.Header.Set("Content-Length", strconv.Itoa(int(req.ContentLength)))
@@ -154,38 +166,48 @@ func DoRequest(req *http.Request, redirect bool) (*structs.Response, error) {
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		}
 	}
+	start := time.Now()
 
-	var oResp *http.Response
-	var err error
+	trace := &httptrace.ClientTrace{
+		GotFirstResponseByte: func() {
+			milliseconds = time.Since(start).Nanoseconds() / 1e6
+		},
+	}
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+
 	if redirect {
 		oResp, err = client.Do(req)
 	} else {
 		oResp, err = clientNoRedirect.Do(req)
 	}
-	if oResp != nil {
-		defer oResp.Body.Close()
-	}
+
 	if err != nil {
 		wrappedErr := errors.Newf(errors.RequestError, "Request error: %v", err)
-		return nil, wrappedErr
+		return nil, 0, wrappedErr
 	}
-	resp, err := ParseResponse(oResp)
-	if err != nil {
-		wrappedErr := errors.Newf(errors.ResponseError, "Parse response error: %v", err)
-		return nil, wrappedErr
-	}
-	return resp, nil
+
+	return oResp, milliseconds, nil
 }
 
 func ParseRequest(oReq *http.Request) (*structs.Request, error) {
+	var (
+		header    string
+		rawHeader string = ""
+	)
 	req := &structs.Request{}
+
 	req.Method = oReq.Method
 	req.Url = ParseUrl(oReq.URL)
-	header := make(map[string]string)
+
+	headers := make(map[string]string)
 	for k := range oReq.Header {
-		header[k] = oReq.Header.Get(k)
+		header = oReq.Header.Get(k)
+		headers[k] = header
+		rawHeader += fmt.Sprintf("%s=%s\n", k, headers)
 	}
-	req.Headers = header
+	req.Headers = headers
+	req.RawHeader = []byte(strings.Trim(rawHeader, "\n"))
+
 	req.ContentType = oReq.Header.Get("Content-Type")
 	if oReq.Body == nil || oReq.Body == http.NoBody {
 	} else {
@@ -197,10 +219,13 @@ func ParseRequest(oReq *http.Request) (*structs.Request, error) {
 		req.Body = data
 		oReq.Body = ioutil.NopCloser(bytes.NewBuffer(data))
 	}
+
+	req.Raw, _ = httputil.DumpRequestOut(oReq, true)
+
 	return req, nil
 }
 
-func ParseResponse(oResp *http.Response) (*structs.Response, error) {
+func ParseResponse(oResp *http.Response, milliseconds int64) (*structs.Response, error) {
 	var resp structs.Response
 	header := make(map[string]string)
 	resp.Status = int32(oResp.StatusCode)
@@ -210,15 +235,20 @@ func ParseResponse(oResp *http.Response) (*structs.Response, error) {
 	}
 	resp.Headers = header
 	resp.ContentType = oResp.Header.Get("Content-Type")
-	body, err := getRespBody(oResp)
+	body, err := GetRespBody(oResp)
 	if err != nil {
 		return nil, err
 	}
+
+	resp.Raw = body
 	resp.Body = body
+
+	resp.Latency = milliseconds
+
 	return &resp, nil
 }
 
-func getRespBody(oResp *http.Response) ([]byte, error) {
+func GetRespBody(oResp *http.Response) ([]byte, error) {
 	var body []byte
 	if oResp.Header.Get("Content-Encoding") == "gzip" {
 		gr, _ := gzip.NewReader(oResp.Body)

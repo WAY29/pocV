@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -17,17 +16,18 @@ import (
 	"github.com/WAY29/pocV/pkg/xray/structs"
 	xray_structs "github.com/WAY29/pocV/pkg/xray/structs"
 	"github.com/WAY29/pocV/utils"
+	"gopkg.in/yaml.v2"
 
 	"github.com/panjf2000/ants"
 	"github.com/projectdiscovery/nuclei/v2/pkg/output"
 )
 
 var (
-	Ticker    *time.Ticker
-	WaitGroup sync.WaitGroup
-	Pool      *ants.PoolWithFunc
-
+	Ticker  *time.Ticker
+	Pool    *ants.PoolWithFunc
 	Verbose bool
+
+	WaitGroup sync.WaitGroup
 
 	OutputChannel chan common_structs.Result
 )
@@ -190,43 +190,61 @@ func executeNucleiPoc(target string, poc *nuclei_structs.Poc) (results []*output
 	return results, isVul, err
 }
 
-func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
+func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (bool, error) {
 	var (
-		setPayloadValue string
-		oReqUrlString   = oReq.URL.String()
+		milliseconds  int64
+		Request       *http.Request
+		Response      *http.Response
+		protoRequest  *xray_structs.Request
+		protoResponse *xray_structs.Response
+		oReqUrlString = oReq.URL.String()
 	)
 
-	utils.DebugF("Run Xray Poc %s (%s)", oReqUrlString, p.Name)
+	utils.DebugF("Run Xray Poc %s (%s)", oReqUrlString, poc.Name)
 
 	c := cel.NewEnvOption()
-
-	c.UpdateCompileOptions(p.Set)
 	env, err := cel.NewEnv(&c)
-
 	if err != nil {
 		wrappedErr := errors.Wrap(err, "Environment creation error")
 		utils.ErrorP(wrappedErr)
 		return false, err
 	}
 
+	// 请求中的全局变量
 	variableMap := make(map[string]interface{})
-	req, err := requests.ParseRequest(oReq)
-	if err != nil {
-		wrappedErr := errors.Wrapf(err, "Run poc (%v) error", p.Name)
-		utils.ErrorP(wrappedErr)
-		return false, err
-	}
-	variableMap["request"] = req
 
-	// 现在假定set中payload作为最后产出，那么先解析其他的自定义变量，更新map[string]interface{}后再来解析payload
-	for _, item := range p.Set {
-		k, expression := item.Key.(string), item.Value.(string)
-		if k != "payload" {
+	// 定义渲染函数
+	render := func(v string) string {
+		for k1, v1 := range variableMap {
+			_, isMap := v1.(map[string]string)
+			if isMap {
+				continue
+			}
+			v1Value := fmt.Sprintf("%v", v1)
+			t := "{{" + k1 + "}}"
+			if !strings.Contains(v, t) {
+				continue
+			}
+			v = strings.ReplaceAll(v, t, v1Value)
+		}
+		return v
+	}
+	// 定义evaluateUpdateVariableMap
+	evaluateUpdateVariableMap := func(env *cel.Env, set yaml.MapSlice) {
+		for _, item := range set {
+			k, expression := item.Key.(string), item.Value.(string)
 			if expression == "newReverse()" {
 				reverse := xrayNewReverse()
 				variableMap[k] = reverse
 				continue
 			}
+			env, err = cel.NewEnv(&c)
+			if err != nil {
+				wrappedErr := errors.Wrap(err, "Environment re-creation error")
+				utils.ErrorP(wrappedErr)
+				return
+			}
+
 			out, err := cel.Evaluate(env, expression, variableMap)
 			if err != nil {
 				wrappedErr := errors.Wrap(err, "Set variable error")
@@ -241,158 +259,167 @@ func executeXrayPoc(oReq *http.Request, p *xray_structs.Poc) (bool, error) {
 			default:
 				variableMap[k] = fmt.Sprintf("%v", out)
 			}
-		} else {
-			setPayloadValue = expression
 		}
 	}
 
-	// 执行payload
-	if setPayloadValue != "" {
-		out, err := cel.Evaluate(env, setPayloadValue, variableMap)
-		if err != nil {
-			return false, err
-		}
-		variableMap["payload"] = fmt.Sprintf("%v", out)
+	// 处理set
+	c.UpdateCompileOptions(poc.Set)
+	evaluateUpdateVariableMap(env, poc.Set)
+
+	// TODO: payloads continue
+	// 处理payload
+	for _, setMapVal := range poc.Payloads.Payloads {
+		setMap := setMapVal.Value.(yaml.MapSlice)
+		c.UpdateCompileOptions(setMap)
+		evaluateUpdateVariableMap(env, setMap)
 	}
+	// 渲染detail
+	detail := &poc.Detail
+	detail.Author = render(detail.Author)
+	for k, v := range poc.Detail.Links {
+		detail.Links[k] = render(v)
+	}
+	fingerPrint := &detail.FingerPrint
+	for _, info := range fingerPrint.Infos {
+		info.ID = render(info.ID)
+		info.Name = render(info.Name)
+		info.Version = render(info.Version)
+		info.Type = render(info.Type)
+	}
+	fingerPrint.HostInfo.Hostname = render(fingerPrint.HostInfo.Hostname)
+	vulnerability := &detail.Vulnerability
+	vulnerability.ID = render(vulnerability.ID)
+	vulnerability.Match = render(vulnerability.Match)
 
 	success := false
 
-	// 处理单条Rule
-	DealWithRule := func(rule xray_structs.Rule) (bool, error) {
+	// 处理Rule中的单条request
+	RequestInvoke := func(ruleName string, rule xray_structs.Rule) (bool, error) {
 		var (
 			flag, ok bool
 			err      error
-			Request  *http.Request
-			Response *xray_structs.Response
+			ruleReq  xray_structs.RuleRequest = rule.Request
 		)
 
-		for k1, v1 := range variableMap {
-			_, isMap := v1.(map[string]string)
-			if isMap {
-				continue
-			}
-			value := fmt.Sprintf("%v", v1)
-			for k2, v2 := range rule.Headers {
-				rule.Headers[k2] = strings.ReplaceAll(v2, "{{"+k1+"}}", value)
-			}
-			rule.Path = strings.ReplaceAll(strings.TrimSpace(rule.Path), "{{"+k1+"}}", value)
-			rule.Body = strings.ReplaceAll(strings.TrimSpace(rule.Body), "{{"+k1+"}}", value)
+		// 渲染请求头，请求路径和请求体
+		for k, v := range ruleReq.Headers {
+			ruleReq.Headers[k] = render(v)
 		}
+		ruleReq.Path = render(strings.TrimSpace(ruleReq.Path))
+		ruleReq.Body = render(strings.TrimSpace(ruleReq.Body))
 
 		// 尝试获取缓存
-		if Request, Response, ok = requests.XrayGetRequestResponseCache(&rule); !ok {
+		if Request, protoRequest, protoResponse, ok = requests.XrayGetRequestResponseCache(&ruleReq); !ok || !rule.Request.Cache {
+			// 获取protoRequest
+			protoRequest, err = requests.ParseRequest(oReq)
+			if err != nil {
+				wrappedErr := errors.Wrapf(err, "Run poc (%v) parse request error", poc.Name)
+				utils.ErrorP(wrappedErr)
+				return false, err
+			}
+
 			// 处理Path
 			if oReq.URL.Path != "" && oReq.URL.Path != "/" {
-				req.Url.Path = fmt.Sprint(oReq.URL.Path, rule.Path)
+				protoRequest.Url.Path = fmt.Sprint(oReq.URL.Path, ruleReq.Path)
 			} else {
-				req.Url.Path = rule.Path
+				protoRequest.Url.Path = ruleReq.Path
 			}
+
 			// 某些poc没有区分path和query，需要处理
-			req.Url.Path = strings.ReplaceAll(req.Url.Path, " ", "%20")
-			req.Url.Path = strings.ReplaceAll(req.Url.Path, "+", "%20")
+			protoRequest.Url.Path = strings.ReplaceAll(protoRequest.Url.Path, " ", "%20")
+			protoRequest.Url.Path = strings.ReplaceAll(protoRequest.Url.Path, "+", "%20")
 
 			// 克隆请求对象
-			Request, _ = http.NewRequest(rule.Method, fmt.Sprintf("%s://%s%s", req.Url.Scheme, req.Url.Host, req.Url.Path), strings.NewReader(rule.Body))
+			Request, _ = http.NewRequest(ruleReq.Method, fmt.Sprintf("%s://%s%s", protoRequest.Url.Scheme, protoRequest.Url.Host, protoRequest.Url.Path), strings.NewReader(ruleReq.Body))
 
 			Request.Header = oReq.Header.Clone()
-			for k, v := range rule.Headers {
+			rawHeader := ""
+			for k, v := range ruleReq.Headers {
 				Request.Header.Set(k, v)
+				rawHeader += fmt.Sprintf("%s=%s\n", k, v)
 			}
+			protoRequest.RawHeader = []byte(strings.Trim(rawHeader, "\n"))
 
 			// 发起请求
-			Response, err = requests.DoRequest(Request, rule.FollowRedirects)
+			Response, milliseconds, err = requests.DoRequest(Request, ruleReq.FollowRedirects)
 			if err != nil {
 				return false, err
 			}
 
 			// 设置缓存
-			requests.XraySetRequestResponseCache(&rule, Request, Response)
+			requests.XraySetRequestResponseCache(&ruleReq, Request, protoRequest, protoResponse)
 		} else {
-			utils.DebugF("Use Request Cache [%s%s]", oReqUrlString, rule.Path)
+			utils.DebugF("Use Request Cache [%s%s]", oReqUrlString, ruleReq.Path)
 		}
 
-		variableMap["response"] = Response
+		variableMap["request"] = protoRequest
 
-		// 先判断响应页面是否匹配search规则
-		if rule.Search != "" {
-			result := xrayDoSearch(strings.TrimSpace(rule.Search), string(Response.Body))
-			if result != nil && len(result) > 0 { // 正则匹配成功
-				for k, v := range result {
-					variableMap[k] = v
-				}
-			} else {
-				return false, nil
-			}
+		// 获取protoResponse
+		protoResponse, err = requests.ParseResponse(Response, milliseconds)
+		if err != nil {
+			wrappedErr := errors.Wrapf(err, "Run poc[%s] parse response error", poc.Name)
+			utils.ErrorP(wrappedErr)
+			return false, err
 		}
+		variableMap["response"] = protoResponse
 
 		// 执行表达式
-		out, err := cel.Evaluate(env, rule.Expression, variableMap)
+		// ? 需要重新生成一遍环境，否则之前增加的变量定义不生效
+		env, err = cel.NewEnv(&c)
 		if err != nil {
-			wrappedErr := errors.Wrap(err, "Evalute expression error")
+			wrappedErr := errors.Wrap(err, "Environment re-creation error")
+			utils.ErrorP(wrappedErr)
+			return false, wrappedErr
+		}
+		out, err := cel.Evaluate(env, rule.Expression, variableMap)
+
+		if err != nil {
+			wrappedErr := errors.Wrapf(err, "Evalute rule[%s] expression error: %s", ruleName, rule.Expression)
+			utils.ErrorP(wrappedErr)
 			return false, wrappedErr
 		}
 
-		// 判断最后执行表达式结果
+		// 判断表达式结果
 		flag, ok = out.Value().(bool)
 		if !ok {
 			flag = false
 		}
+
+		// 处理output
+		c.UpdateCompileOptions(rule.Output)
+		evaluateUpdateVariableMap(env, rule.Output)
+		// 注入名为ruleName的函数
+		c.NewResultFunction(ruleName, flag)
+
 		return flag, nil
 	}
 
-	// Rules
-	if len(p.Rules) > 0 {
-		success = DealWithRules(DealWithRule, p.Rules)
-	} else { // Groups
-		for _, rules := range p.Groups {
-			success = DealWithRules(DealWithRule, rules)
-			if success {
-				break
-			}
-		}
+	// 执行rule
+	for ruleName, rule := range poc.Rules {
+		_, err = RequestInvoke(ruleName, rule)
+	}
+
+	// 判断poc总体表达式结果
+	// ? 需要重新生成一遍环境，否则之前增加的结果函数不生效
+	env, err = cel.NewEnv(&c)
+	if err != nil {
+		wrappedErr := errors.Wrap(err, "Environment re-creation error")
+		utils.ErrorP(wrappedErr)
+		return false, err
+	}
+
+	successVal, err := cel.Evaluate(env, poc.Expression, variableMap)
+	if err != nil {
+		wrappedErr := errors.Wrapf(err, "Evalute poc[%s] expression error: %s", poc.Name, poc.Expression)
+		return false, wrappedErr
+	}
+
+	success, ok := successVal.Value().(bool)
+	if !ok {
+		success = false
 	}
 
 	return success, nil
-}
-
-// 处理xray rules组，只要其中一个不成功则失败
-func DealWithRules(DealWithRuleFunc func(xray_structs.Rule) (bool, error), rules []xray_structs.Rule) bool {
-	successFlag := false
-	for _, rule := range rules {
-		flag, err := DealWithRuleFunc(rule)
-		if err != nil {
-			wrappedErr := errors.Wrap(err, "Execute Rule error")
-			utils.ErrorP(wrappedErr)
-		}
-
-		if err != nil || !flag { //如果false不继续执行后续rule
-			successFlag = false // 如果其中一步为flag，则直接break
-			break
-		}
-		successFlag = true
-	}
-	return successFlag
-}
-
-// 处理xray search属性，匹配正则
-func xrayDoSearch(re string, body string) map[string]string {
-	r, err := regexp.Compile(re)
-	utils.WarningF("Regexp compile error: %v", err.Error())
-	if err != nil {
-		return nil
-	}
-	result := r.FindStringSubmatch(body)
-	names := r.SubexpNames()
-	if len(result) > 1 && len(names) > 1 {
-		paramsMap := make(map[string]string)
-		for i, name := range names {
-			if i > 0 && i <= len(result) {
-				paramsMap[name] = result[i]
-			}
-		}
-		return paramsMap
-	}
-	return nil
 }
 
 // xray dns反连平台 目前只支持dnslog.cn和ceye.io
@@ -404,13 +431,14 @@ func xrayNewReverse() *xray_structs.Reverse {
 		urlStr = fmt.Sprintf("http://%s.%s", sub, common_structs.CeyeDomain)
 	case structs.ReverseType_DnslogCN:
 		dnslogCnRequest := common_structs.DnslogCNGetDomainRequest
-		resp, err := requests.DoRequest(dnslogCnRequest, false)
+		resp, _, err := requests.DoRequest(dnslogCnRequest, false)
 		if err != nil {
 			wrappedErr := errors.Wrap(err, "Get reverse domain error: Can't get domain from dnslog.cn")
 			utils.ErrorP(wrappedErr)
 			return &xray_structs.Reverse{}
 		}
-		urlStr = "http://" + string(resp.GetBody())
+		content, _ := requests.GetRespBody(resp)
+		urlStr = "http://" + string(content)
 	default:
 		return &xray_structs.Reverse{}
 	}

@@ -108,7 +108,6 @@ func cmdRun(cmd *cli.Cmd) {
 		xrayPocs, nucleiPocs := LoadPocs(poc, pocPath)
 		// 过滤poc
 		xrayPocs, nucleiPocs = FilterPocs(*tags, xrayPocs, nucleiPocs)
-		// utils.DebugF("TODO REMOVE THIS: %#v %#v", xrayPocs, nucleiPocs)
 
 		// 初始化输出
 		outputChannel, outputWg := output.InitOutput(*file, *json)

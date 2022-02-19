@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/WAY29/pocV/internal/common/errors"
 
@@ -28,6 +29,8 @@ import (
 )
 
 // 自定义Lib库，包含变量和函数
+
+type Env = cel.Env
 type CustomLib struct {
 	envOptions     []cel.EnvOption
 	programOptions []cel.ProgramOption
@@ -95,6 +98,7 @@ func UrlTypeToString(u *structs.UrlType) string {
 func NewEnv(c *CustomLib) (*cel.Env, error) {
 	return cel.NewEnv(cel.Lib(c))
 }
+
 func NewEnvOption() CustomLib {
 	c := CustomLib{}
 	reg := types.NewEmptyRegistry()
@@ -178,6 +182,14 @@ func NewEnvOption() CustomLib {
 			decls.NewFunction("substr",
 				decls.NewOverload("substr_string_int_int",
 					[]*exprpb.Type{decls.String, decls.Int, decls.Int},
+					decls.String)),
+			decls.NewFunction("replaceAll",
+				decls.NewOverload("replaceAll_string_string_string",
+					[]*exprpb.Type{decls.String, decls.String, decls.String},
+					decls.String)),
+			decls.NewFunction("printable",
+				decls.NewOverload("printable_string",
+					[]*exprpb.Type{decls.String},
 					decls.String)),
 		),
 	}
@@ -398,7 +410,45 @@ func NewEnvOption() CustomLib {
 					if !ok {
 						return types.ValOrErr(rhs, "unexpected type '%v' passed to 'wait'", rhs.Type())
 					}
+
 					return types.Bool(reverseCheck(reverse, timeout))
+				},
+			},
+			&functions.Overload{
+				Operator: "replaceAll_string_string_string",
+				Function: func(values ...ref.Val) ref.Val {
+					s, ok := values[0].(types.String)
+					if !ok {
+						return types.ValOrErr(s, "unexpected type '%v' passed to replaceAll", s.Type())
+					}
+					old, ok := values[1].(types.String)
+					if !ok {
+						return types.ValOrErr(old, "unexpected type '%v' passed to replaceAll", old.Type())
+					}
+					new, ok := values[2].(types.String)
+					if !ok {
+						return types.ValOrErr(new, "unexpected type '%v' passed to replaceAll", new.Type())
+					}
+
+					return types.String(strings.ReplaceAll(string(s), string(old), string(new)))
+				},
+			},
+			&functions.Overload{
+				Operator: "printable_string",
+				Unary: func(value ref.Val) ref.Val {
+					s, ok := value.(types.String)
+					if !ok {
+						return types.ValOrErr(s, "unexpected type '%v' passed to printable", s.Type())
+					}
+
+					clean := strings.Map(func(r rune) rune {
+						if unicode.IsPrint(r) {
+							return r
+						}
+						return -1
+					}, string(s))
+
+					return types.String(clean)
 				},
 			},
 		),
@@ -432,6 +482,25 @@ func (c *CustomLib) UpdateCompileOptions(args yaml.MapSlice) {
 	}
 }
 
+func (c *CustomLib) NewResultFunction(funcName string, returnBool bool) {
+	c.envOptions = append(c.envOptions, cel.Declarations(
+		decls.NewFunction(funcName,
+			decls.NewOverload(funcName,
+				[]*exprpb.Type{},
+				decls.Bool)),
+	),
+	)
+
+	c.programOptions = append(c.programOptions, cel.Functions(
+		&functions.Overload{
+			Operator: funcName,
+			Function: func(values ...ref.Val) ref.Val {
+				return types.Bool(returnBool)
+			},
+		}))
+
+}
+
 func reverseCheck(r *structs.Reverse, timeout int64) bool {
 	switch r.ReverseType {
 	case structs.ReverseType_Ceye:
@@ -439,14 +508,15 @@ func reverseCheck(r *structs.Reverse, timeout int64) bool {
 		sub := strings.Split(r.Domain, ".")[0]
 		urlStr := fmt.Sprintf("http://api.ceye.io/v1/records?token=%s&type=dns&filter=%s", common_structs.CeyeApi, sub)
 		req, _ := http.NewRequest("GET", urlStr, nil)
-		resp, err := requests.DoRequest(req, false)
+		resp, _, err := requests.DoRequest(req, false)
 		if err != nil {
 			wrappedErr := errors.Wrap(err, "Reverse check error")
 			utils.ErrorP(wrappedErr)
 			return false
 		}
+		content, _ := requests.GetRespBody(resp)
 
-		if !bytes.Contains(resp.Body, []byte(`"data": []`)) { // api返回结果不为空
+		if !bytes.Contains(content, []byte(`"data": []`)) { // api返回结果不为空
 			utils.DebugF("Got reverse dnslog from %s", r.Domain)
 			return true
 		}
@@ -454,14 +524,15 @@ func reverseCheck(r *structs.Reverse, timeout int64) bool {
 	case structs.ReverseType_DnslogCN:
 		time.Sleep(time.Second * time.Duration(timeout))
 		sub := strings.Split(r.Domain, ".")[0]
-		resp, err := requests.DoRequest(common_structs.DnslogCNGetRecordRequest, false)
+		resp, _, err := requests.DoRequest(common_structs.DnslogCNGetRecordRequest, false)
 		if err != nil {
 			wrappedErr := errors.Wrap(err, "Reverse check error")
 			utils.ErrorP(wrappedErr)
 			return false
 		}
+		content, _ := requests.GetRespBody(resp)
 
-		if bytes.Contains(resp.Body, []byte(sub)) { // api返回结果存在域名
+		if bytes.Contains(content, []byte(sub)) { // api返回结果存在域名
 			utils.DebugF("Got reverse dnslog from %s", r.Domain)
 			return true
 		}

@@ -1,12 +1,12 @@
 # pocV
-一个兼容xray V1和nuclei的poc扫描框架，某知识星球作业
+一个兼容xray V2 http poc和nuclei的poc扫描框架，某知识星球作业
 
 ## Feature
 - 支持请求缓存，加快请求速度
 - 支持ceye.io和dnslog.cn作为反连平台
 - 支持tag子命令为xray/nuclei的poc添加/删除tag，tag可用于筛选poc
 ## TODO
-- [x] xrayV1
+- [x] xrayV2 http
 - [x] nuclei
 - [x] 使用tag筛选poc
 ## Reference

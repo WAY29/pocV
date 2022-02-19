@@ -105,8 +105,7 @@ func check(taskInterface interface{}) {
 
 		isVul, err = executeXrayPoc(req, &poc)
 		if err != nil {
-			wrappedErr := errors.Wrapf(err, "Run Xray Poc (%v) error", pocName)
-			utils.ErrorP(wrappedErr)
+			utils.ErrorP(err)
 			return
 		}
 
@@ -143,8 +142,7 @@ func check(taskInterface interface{}) {
 
 		results, isVul, err := executeNucleiPoc(target, &poc)
 		if err != nil {
-			wrappedErr := errors.Wrapf(err, "Run Nuclei Poc (%v) error", pocName)
-			utils.ErrorP(wrappedErr)
+			utils.ErrorP(err)
 			return
 		}
 
@@ -172,6 +170,13 @@ func check(taskInterface interface{}) {
 func executeNucleiPoc(target string, poc *nuclei_structs.Poc) (results []*output.ResultEvent, isVul bool, err error) {
 	isVul = false
 
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.Wrapf(r.(error), "Run Nuclei Poc (%v) error", poc.ID)
+			isVul = false
+		}
+	}()
+
 	utils.DebugF("Run Nuclei Poc %s (%s)", target, poc.Info.Name)
 
 	e := poc.Executer
@@ -190,7 +195,16 @@ func executeNucleiPoc(target string, poc *nuclei_structs.Poc) (results []*output
 	return results, isVul, err
 }
 
-func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (bool, error) {
+func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err error) {
+	isVul = false
+
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.Wrapf(r.(error), "Run Xray Poc (%v) error", poc.Name)
+			isVul = false
+		}
+	}()
+
 	var (
 		milliseconds  int64
 		Request       *http.Request
@@ -291,8 +305,6 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (bool, error) {
 	vulnerability.ID = render(vulnerability.ID)
 	vulnerability.Match = render(vulnerability.Match)
 
-	success := false
-
 	// 处理Rule中的单条request
 	RequestInvoke := func(ruleName string, rule xray_structs.Rule) (bool, error) {
 		var (
@@ -349,7 +361,7 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (bool, error) {
 			// 设置缓存
 			requests.XraySetRequestResponseCache(&ruleReq, Request, protoRequest, protoResponse)
 		} else {
-			utils.DebugF("Use Request Cache [%s%s]", oReqUrlString, ruleReq.Path)
+			utils.DebugF("Hit Request Cache [%s%s]", oReqUrlString, ruleReq.Path)
 		}
 
 		variableMap["request"] = protoRequest
@@ -414,12 +426,12 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (bool, error) {
 		return false, wrappedErr
 	}
 
-	success, ok := successVal.Value().(bool)
+	isVul, ok := successVal.Value().(bool)
 	if !ok {
-		success = false
+		isVul = false
 	}
 
-	return success, nil
+	return isVul, nil
 }
 
 // xray dns反连平台 目前只支持dnslog.cn和ceye.io

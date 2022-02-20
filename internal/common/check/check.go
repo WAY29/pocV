@@ -172,12 +172,12 @@ func executeNucleiPoc(target string, poc *nuclei_structs.Poc) (results []*output
 
 	defer func() {
 		if r := recover(); r != nil {
-			err = errors.Wrapf(r.(error), "Run Nuclei Poc (%v) error", poc.ID)
+			err = errors.Wrapf(r.(error), "Run Nuclei Poc[%s] error", poc.ID)
 			isVul = false
 		}
 	}()
 
-	utils.DebugF("Run Nuclei Poc %s (%s)", target, poc.Info.Name)
+	utils.DebugF("Run Nuclei Poc %s[%s]", target, poc.Info.Name)
 
 	e := poc.Executer
 	results = make([]*output.ResultEvent, 0, e.Requests())
@@ -200,7 +200,7 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 
 	defer func() {
 		if r := recover(); r != nil {
-			err = errors.Wrapf(r.(error), "Run Xray Poc (%v) error", poc.Name)
+			err = errors.Wrapf(r.(error), "Run Xray Poc[%s] error", poc.Name)
 			isVul = false
 		}
 	}()
@@ -214,7 +214,7 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 		oReqUrlString = oReq.URL.String()
 	)
 
-	utils.DebugF("Run Xray Poc %s (%s)", oReqUrlString, poc.Name)
+	utils.DebugF("Run Xray Poc %s[%s]", oReqUrlString, poc.Name)
 
 	c := cel.NewEnvOption()
 	env, err := cel.NewEnv(&c)
@@ -261,7 +261,7 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 
 			out, err := cel.Evaluate(env, expression, variableMap)
 			if err != nil {
-				wrappedErr := errors.Wrap(err, "Set variable error")
+				wrappedErr := errors.Wrapf(err, "Evalaute expression error: %s", expression)
 				utils.ErrorP(wrappedErr)
 				continue
 			}
@@ -325,7 +325,7 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 			// 获取protoRequest
 			protoRequest, err = requests.ParseRequest(oReq)
 			if err != nil {
-				wrappedErr := errors.Wrapf(err, "Run poc (%v) parse request error", poc.Name)
+				wrappedErr := errors.Wrapf(err, "Run poc[%v] parse request error", poc.Name)
 				utils.ErrorP(wrappedErr)
 				return false, err
 			}

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -331,10 +333,10 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 			}
 
 			// 处理Path
-			if oReq.URL.Path != "" && oReq.URL.Path != "/" {
-				protoRequest.Url.Path = fmt.Sprint(oReq.URL.Path, ruleReq.Path)
-			} else {
-				protoRequest.Url.Path = ruleReq.Path
+			if strings.HasPrefix(ruleReq.Path, "/") {
+				protoRequest.Url.Path = path.Join(oReq.URL.Path, ruleReq.Path)
+			} else if strings.HasPrefix(ruleReq.Path, "^") {
+				protoRequest.Url.Path = ruleReq.Path[1:]
 			}
 
 			// 某些poc没有区分path和query，需要处理
@@ -358,6 +360,14 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 				return false, err
 			}
 
+			// 获取protoResponse
+			protoResponse, err = requests.ParseResponse(Response, milliseconds)
+			if err != nil {
+				wrappedErr := errors.Wrapf(err, "Run poc[%s] parse response error", poc.Name)
+				utils.ErrorP(wrappedErr)
+				return false, err
+			}
+
 			// 设置缓存
 			requests.XraySetRequestResponseCache(&ruleReq, Request, protoRequest, protoResponse)
 		} else {
@@ -365,14 +375,6 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 		}
 
 		variableMap["request"] = protoRequest
-
-		// 获取protoResponse
-		protoResponse, err = requests.ParseResponse(Response, milliseconds)
-		if err != nil {
-			wrappedErr := errors.Wrapf(err, "Run poc[%s] parse response error", poc.Name)
-			utils.ErrorP(wrappedErr)
-			return false, err
-		}
 		variableMap["response"] = protoResponse
 
 		// 执行表达式
@@ -407,8 +409,20 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 	}
 
 	// 执行rule
-	for ruleName, rule := range poc.Rules {
-		_, err = RequestInvoke(ruleName, rule)
+	// TODO: yaml读取时确保顺序(map是无序的，考虑将Rules设置为yaml.MapSlice，但是需要手动处理解析后的数据)
+	// TODO: 暂时先用排序根据ruleName确保顺序
+	rules := poc.Rules
+	ruleKeys := make([]string, len(rules))
+	i := 0
+	for k := range rules {
+		ruleKeys[i] = k
+		i++
+	}
+	sort.Strings(ruleKeys)
+	// utils.DebugF("rule keys: %#v", ruleKeys)
+
+	for _, ruleName := range ruleKeys {
+		_, err = RequestInvoke(ruleName, rules[ruleName])
 	}
 
 	// 判断poc总体表达式结果

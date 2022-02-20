@@ -13,25 +13,19 @@ import (
 	"net/http/httptrace"
 	"net/http/httputil"
 	"net/url"
-	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/WAY29/pocV/internal/common/errors"
 	"github.com/WAY29/pocV/pkg/xray/structs"
-	"github.com/WAY29/pocV/utils"
 )
 
 var (
-	client                 *http.Client
-	clientNoRedirect       *http.Client
-	dialTimout             = 5 * time.Second
-	keepAlive              = 15 * time.Second
-	XrayRequestCache       = make(map[string]*http.Request)
-	XrayProtoRequestCache  = make(map[string]*structs.Request)
-	XrayProtoResponseCache = make(map[string]*structs.Response)
+	client           *http.Client
+	clientNoRedirect *http.Client
+	dialTimout       = 5 * time.Second
+	keepAlive        = 15 * time.Second
 )
 
 func InitHttpClient(ThreadsNum int, DownProxy string, Timeout time.Duration) error {
@@ -88,69 +82,6 @@ func ParseUrl(u *url.URL) *structs.UrlType {
 		Query:    u.RawQuery,
 		Fragment: u.Fragment,
 	}
-}
-
-func XrayCanCluster(r, other *structs.RuleRequest) bool {
-	if r.Method != other.Method ||
-		r.Path != other.Path ||
-		r.Body != other.Body ||
-		r.FollowRedirects != other.FollowRedirects ||
-		!reflect.DeepEqual(r.Headers, other.Headers) {
-		return false
-	}
-	return true
-}
-
-func XrayGetRuleHash(req *structs.RuleRequest) string {
-	headers := req.Headers
-	keys := make([]string, len(headers))
-	headerStirng := ""
-	i := 0
-	for k := range headers {
-		keys[i] = k
-		i++
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		headerStirng += fmt.Sprintf("%s%s", k, headers[k])
-	}
-
-	return utils.MD5(fmt.Sprintf("%s%s%s%s%v", req.Method, req.Path, headerStirng, req.Body, req.FollowRedirects))
-}
-
-func XraySetRequestResponseCache(ruleReq *structs.RuleRequest, request *http.Request, protoRequest *structs.Request, protoResponse *structs.Response) bool {
-	ruleHash := XrayGetRuleHash(ruleReq)
-
-	if _, ok := XrayRequestCache[ruleHash]; !ok {
-		XrayRequestCache[ruleHash] = request
-	}
-	if _, ok := XrayProtoRequestCache[ruleHash]; !ok {
-		XrayProtoRequestCache[ruleHash] = protoRequest
-	}
-	if _, ok := XrayProtoResponseCache[ruleHash]; !ok {
-		XrayProtoResponseCache[ruleHash] = protoResponse
-	}
-
-	return true
-}
-
-func XrayGetRequestResponseCache(ruleReq *structs.RuleRequest) (*http.Request, *structs.Request, *structs.Response, bool) {
-	var (
-		Request       *http.Request
-		protoRequest  *structs.Request
-		protoResponse *structs.Response
-		ok            bool
-	)
-	ruleHash := XrayGetRuleHash(ruleReq)
-
-	if Request, ok = XrayRequestCache[ruleHash]; ok {
-		if protoRequest, ok = XrayProtoRequestCache[ruleHash]; ok {
-			if protoResponse, ok = XrayProtoResponseCache[ruleHash]; ok {
-				return Request, protoRequest, protoResponse, true
-			}
-		}
-	}
-	return nil, nil, nil, false
 }
 
 func DoRequest(req *http.Request, redirect bool) (*http.Response, int64, error) {

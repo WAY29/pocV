@@ -109,6 +109,14 @@ func cmdRun(cmd *cli.Cmd) {
 		// 过滤poc
 		xrayPocs, nucleiPocs = FilterPocs(*tags, xrayPocs, nucleiPocs)
 
+		// 计算xray的总发包量，初始化缓存
+		xrayTotalReqeusts := 0
+		totalTargets := len(targets)
+		for _, poc := range xrayPocs {
+			xrayTotalReqeusts += totalTargets * len(poc.Rules)
+		}
+		xray_requests.InitCache(xrayTotalReqeusts)
+
 		// 初始化输出
 		outputChannel, outputWg := output.InitOutput(*file, *json)
 

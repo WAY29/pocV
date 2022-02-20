@@ -19,7 +19,7 @@
 ```bash
 # 安装pocV
 git clone --recurse-submodules https://github.com/WAY29/pocV
-go build  -ldflags "-w -s" cmd/pocV/pocV.go
+go build  -ldflags "-w -s" ./cmd/pocV/
 # 更新所有的poc
 git submodule update --remote --recursive
 ```

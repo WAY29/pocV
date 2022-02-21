@@ -85,6 +85,9 @@ func cmdRun(cmd *cli.Cmd) {
 		for _, poc := range xrayPocs {
 			xrayTotalReqeusts += totalTargets * len(poc.Rules)
 		}
+		if xrayTotalReqeusts == 0 {
+			xrayTotalReqeusts = 1
+		}
 		xray_requests.InitCache(xrayTotalReqeusts)
 
 		// 初始化输出

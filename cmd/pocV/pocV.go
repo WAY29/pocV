@@ -117,8 +117,9 @@ func main() {
 	app = cli.App("pocV", "Powerful poc framework, adapted to Xray and Nuclei POC")
 	app.Command("tag", "Add tag(s) for poc(s)", cmdTag)
 	app.Command("run", "Run to test poc", cmdRun)
+	app.Command("update", "Self-update pocV", cmdUpdate)
 
-	app.Version("V version", "pocV 1.0.0")
+	app.Version("V version", "pocV "+__version__)
 	app.Spec = "[-V]"
 
 	app.Run(os.Args)

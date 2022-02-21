@@ -5,6 +5,10 @@
 - 支持请求缓存，加快请求速度
 - 支持ceye.io和dnslog.cn作为反连平台
 - 支持tag子命令为xray/nuclei的poc添加/删除tag，tag可用于筛选poc
+
+## Short
+- 支持大部分xray的函数，但不支持冷门函数: faviconHash，toUintString
+- 代码未经过大量测试
 ## TODO
 - [x] xrayV2 http
 - [x] nuclei

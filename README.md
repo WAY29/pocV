@@ -29,9 +29,19 @@ git clone --recurse-submodules https://github.com/WAY29/pocV
 go build  -ldflags "-w -s" ./cmd/pocV/
 # update all pocs
 git submodule update --remote --recursive
+# self-update
+pocV update
 ```
 ### release
 ```bash
+# download releases from https://github.com/WAY29/pocV/releases
+# ...
+# clone pocs 
+git clone https://github.com/projectdiscovery/nuclei-templates && git clone https://github.com/chaitin/xray
+# update pocs
+cd ./nuclei-templates && git pull && cd ../xray && git pull
+# self-update
+pocV update
 ```
 
 ## Example

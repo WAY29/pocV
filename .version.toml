@@ -1,4 +1,5 @@
 [main]
+  extraCommands = ["git push", "git push --tags"]
   serialize = "{version}-{banner}"
   tag = true
   version = "2.4.0"

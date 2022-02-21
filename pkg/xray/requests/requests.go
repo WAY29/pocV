@@ -171,7 +171,12 @@ func ParseResponse(oResp *http.Response, milliseconds int64) (*structs.Response,
 		return nil, err
 	}
 
-	resp.Raw = body
+	// 原始http响应
+	resp.Raw, err = httputil.DumpResponse(oResp, true)
+	if err != nil {
+		resp.Raw = body
+	}
+	// http响应体
 	resp.Body = body
 
 	resp.Latency = milliseconds

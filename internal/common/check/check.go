@@ -282,7 +282,6 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 	c.UpdateCompileOptions(poc.Set)
 	evaluateUpdateVariableMap(env, poc.Set)
 
-	// TODO: payloads continue
 	// 处理payload
 	for _, setMapVal := range poc.Payloads.Payloads {
 		setMap := setMapVal.Value.(yaml.MapSlice)
@@ -371,11 +370,14 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 			// 设置缓存
 			requests.XraySetRequestResponseCache(&ruleReq, Request, protoRequest, protoResponse)
 		} else {
-			utils.DebugF("Hit Request Cache [%s%s]", oReqUrlString, ruleReq.Path)
+			utils.DebugF("Hit request cache [%s%s]", oReqUrlString, ruleReq.Path)
 		}
 
 		variableMap["request"] = protoRequest
 		variableMap["response"] = protoResponse
+
+		utils.DebugF("raw requests: \n%#s", string(protoRequest.Raw))
+		utils.DebugF("raw response: \n%#s", string(protoResponse.Raw))
 
 		// 执行表达式
 		// ? 需要重新生成一遍环境，否则之前增加的变量定义不生效
@@ -419,7 +421,6 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 		i++
 	}
 	sort.Strings(ruleKeys)
-	// utils.DebugF("rule keys: %#v", ruleKeys)
 
 	for _, ruleName := range ruleKeys {
 		_, err = RequestInvoke(ruleName, rules[ruleName])

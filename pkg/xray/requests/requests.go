@@ -157,7 +157,11 @@ func ParseRequest(oReq *http.Request) (*structs.Request, error) {
 }
 
 func ParseResponse(oResp *http.Response, milliseconds int64) (*structs.Response, error) {
-	var resp structs.Response
+	var (
+		resp structs.Response
+		err  error
+	)
+
 	header := make(map[string]string)
 	resp.Status = int32(oResp.StatusCode)
 	resp.Url = ParseUrl(oResp.Request.URL)
@@ -166,13 +170,13 @@ func ParseResponse(oResp *http.Response, milliseconds int64) (*structs.Response,
 	}
 	resp.Headers = header
 	resp.ContentType = oResp.Header.Get("Content-Type")
+	// 原始http响应
+	resp.Raw, err = httputil.DumpResponse(oResp, true)
 	body, err := GetRespBody(oResp)
 	if err != nil {
 		return nil, err
 	}
 
-	// 原始http响应
-	resp.Raw, err = httputil.DumpResponse(oResp, true)
 	if err != nil {
 		resp.Raw = body
 	}

@@ -1,7 +1,7 @@
 [main]
   serialize = "{version}-{banner}"
   tag = true
-  version = "2.3.0"
+  version = "2.4.0"
 
 [[operate]]
   location = "cmd/pocV/pocV.go"

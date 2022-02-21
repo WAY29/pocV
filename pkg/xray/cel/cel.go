@@ -8,10 +8,11 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/dlclark/regexp2"
 
 	"github.com/WAY29/pocV/internal/common/errors"
 
@@ -102,6 +103,7 @@ func NewEnv(c *CustomLib) (*cel.Env, error) {
 func NewEnvOption() CustomLib {
 	c := CustomLib{}
 	reg := types.NewEmptyRegistry()
+	strStrMapType := decls.NewMapType(decls.String, decls.Bytes)
 
 	c.envOptions = []cel.EnvOption{
 		cel.CustomTypeAdapter(reg),
@@ -112,6 +114,7 @@ func NewEnvOption() CustomLib {
 			&structs.Request{},
 			&structs.Response{},
 			&structs.Reverse{},
+			strStrMapType,
 		),
 		cel.Declarations(
 			decls.NewVar("request", decls.NewObjectType("structs.Request")),
@@ -123,14 +126,35 @@ func NewEnvOption() CustomLib {
 				decls.NewInstanceOverload("bytes_bcontains_bytes",
 					[]*exprpb.Type{decls.Bytes, decls.Bytes},
 					decls.Bool)),
-			decls.NewFunction("bmatches",
-				decls.NewInstanceOverload("string_bmatches_bytes",
-					[]*exprpb.Type{decls.String, decls.Bytes},
+			decls.NewFunction("ibcontains",
+				decls.NewInstanceOverload("bytes_ibcontains_bytes",
+					[]*exprpb.Type{decls.Bytes, decls.Bytes},
 					decls.Bool)),
 			decls.NewFunction("icontains",
 				decls.NewInstanceOverload("icontains_string",
 					[]*exprpb.Type{decls.String, decls.String},
 					decls.Bool)),
+			// TODO: implement
+			decls.NewFunction("bstartsWith",
+				decls.NewInstanceOverload("bytes_bstartsWith_bytes",
+					[]*exprpb.Type{decls.Bytes, decls.Bytes},
+					decls.Bool)),
+			// TODO: implement
+			decls.NewFunction("submatch",
+				decls.NewInstanceOverload("string_submatch_string",
+					[]*exprpb.Type{decls.String, decls.String},
+					strStrMapType,
+				)),
+			decls.NewFunction("bmatches",
+				decls.NewInstanceOverload("string_bmatches_bytes",
+					[]*exprpb.Type{decls.String, decls.Bytes},
+					decls.Bool)),
+			// TODO: implement
+			decls.NewFunction("bsubmatch",
+				decls.NewInstanceOverload("string_bsubmatch_bytes",
+					[]*exprpb.Type{decls.String, decls.Bytes},
+					strStrMapType,
+				)),
 			decls.NewFunction("wait",
 				decls.NewInstanceOverload("reverse_wait_int",
 					[]*exprpb.Type{decls.Any, decls.Int},
@@ -191,6 +215,11 @@ func NewEnvOption() CustomLib {
 				decls.NewOverload("printable_string",
 					[]*exprpb.Type{decls.String},
 					decls.String)),
+			// TODO: implement
+			decls.NewFunction("sleep",
+				decls.NewOverload("sleep_int",
+					[]*exprpb.Type{decls.Int},
+					decls.Bool)),
 		),
 	}
 	c.programOptions = []cel.ProgramOption{
@@ -210,21 +239,17 @@ func NewEnvOption() CustomLib {
 				},
 			},
 			&functions.Overload{
-				Operator: "string_bmatch_bytes",
+				Operator: "bytes_ibcontains_bytes",
 				Binary: func(lhs ref.Val, rhs ref.Val) ref.Val {
-					v1, ok := lhs.(types.String)
+					v1, ok := lhs.(types.Bytes)
 					if !ok {
-						return types.ValOrErr(lhs, "unexpected type '%v' passed to bmatch", lhs.Type())
+						return types.ValOrErr(lhs, "unexpected type '%v' passed to bcontains", lhs.Type())
 					}
 					v2, ok := rhs.(types.Bytes)
 					if !ok {
-						return types.ValOrErr(rhs, "unexpected type '%v' passed to bmatch", rhs.Type())
+						return types.ValOrErr(rhs, "unexpected type '%v' passed to bcontains", rhs.Type())
 					}
-					ok, err := regexp.Match(string(v1), v2)
-					if err != nil {
-						return types.NewErr("%v", err)
-					}
-					return types.Bool(ok)
+					return types.Bool(bytes.Contains(bytes.ToLower(v1), bytes.ToLower(v2)))
 				},
 			},
 			&functions.Overload{
@@ -240,6 +265,123 @@ func NewEnvOption() CustomLib {
 					}
 					// 不区分大小写包含
 					return types.Bool(strings.Contains(strings.ToLower(string(v1)), strings.ToLower(string(v2))))
+				},
+			},
+			&functions.Overload{
+				Operator: "bytes_bstartsWith_bytes",
+				Binary: func(lhs ref.Val, rhs ref.Val) ref.Val {
+					v1, ok := lhs.(types.Bytes)
+					if !ok {
+						return types.ValOrErr(lhs, "unexpected type '%v' passed to bstartsWith", lhs.Type())
+					}
+					v2, ok := rhs.(types.Bytes)
+					if !ok {
+						return types.ValOrErr(rhs, "unexpected type '%v' passed to bstartsWith", rhs.Type())
+					}
+					return types.Bool(bytes.HasPrefix(v1, v2))
+				},
+			},
+			&functions.Overload{
+				Operator: "string_bmatches_bytes",
+				Binary: func(lhs ref.Val, rhs ref.Val) ref.Val {
+					var isMatch = false
+					var err error
+
+					v1, ok := lhs.(types.String)
+					if !ok {
+						return types.ValOrErr(lhs, "unexpected type '%v' passed to bmatches", lhs.Type())
+					}
+					v2, ok := rhs.(types.Bytes)
+					if !ok {
+						return types.ValOrErr(rhs, "unexpected type '%v' passed to bmatches", rhs.Type())
+					}
+					re := regexp2.MustCompile(string(v1), 0)
+					if isMatch, err = re.MatchString(string([]byte(v2))); err != nil {
+						return types.NewErr("%v", err)
+					}
+					return types.Bool(isMatch)
+				},
+			},
+			&functions.Overload{
+				Operator: "matches_string",
+				Binary: func(lhs ref.Val, rhs ref.Val) ref.Val {
+					var (
+						isMatch = false
+						err     error
+					)
+
+					v1, ok := lhs.(types.String)
+					if !ok {
+						return types.ValOrErr(lhs, "unexpected type '%v' passed to matches", lhs.Type())
+					}
+					v2, ok := rhs.(types.String)
+					if !ok {
+						return types.ValOrErr(rhs, "unexpected type '%v' passed to matches", rhs.Type())
+					}
+
+					re := regexp2.MustCompile(string(v1), 0)
+					if isMatch, err = re.MatchString(string(v2)); err != nil {
+						return types.NewErr("%v", err)
+					}
+					return types.Bool(isMatch)
+				},
+			},
+			&functions.Overload{
+				Operator: "string_submatch_string",
+				Binary: func(lhs ref.Val, rhs ref.Val) ref.Val {
+					var (
+						resultMap = make(map[string]string)
+					)
+
+					v1, ok := lhs.(types.String)
+					if !ok {
+						return types.ValOrErr(lhs, "unexpected type '%v' passed to submatch", lhs.Type())
+					}
+					v2, ok := rhs.(types.String)
+					if !ok {
+						return types.ValOrErr(rhs, "unexpected type '%v' passed to submatch", rhs.Type())
+					}
+
+					re := regexp2.MustCompile(string(v1), regexp2.RE2)
+					if m, _ := re.FindStringMatch(string(v2)); m != nil {
+						gps := m.Groups()
+						for n, gp := range gps {
+							if n == 0 {
+								continue
+							}
+							resultMap[gp.Name] = gp.String()
+						}
+					}
+					return types.NewStringStringMap(reg, resultMap)
+				},
+			},
+			&functions.Overload{
+				Operator: "string_bsubmatch_bytes",
+				Binary: func(lhs ref.Val, rhs ref.Val) ref.Val {
+					var (
+						resultMap = make(map[string]string)
+					)
+
+					v1, ok := lhs.(types.String)
+					if !ok {
+						return types.ValOrErr(lhs, "unexpected type '%v' passed to bsubmatch", lhs.Type())
+					}
+					v2, ok := rhs.(types.Bytes)
+					if !ok {
+						return types.ValOrErr(rhs, "unexpected type '%v' passed to bsubmatch", rhs.Type())
+					}
+
+					re := regexp2.MustCompile(string(v1), regexp2.RE2)
+					if m, _ := re.FindStringMatch(string([]byte(v2))); m != nil {
+						gps := m.Groups()
+						for n, gp := range gps {
+							if n == 0 {
+								continue
+							}
+							resultMap[gp.Name] = gp.String()
+						}
+					}
+					return types.NewStringStringMap(reg, resultMap)
 				},
 			},
 			&functions.Overload{
@@ -449,6 +591,17 @@ func NewEnvOption() CustomLib {
 					}, string(s))
 
 					return types.String(clean)
+				},
+			},
+			&functions.Overload{
+				Operator: "sleep_int",
+				Unary: func(value ref.Val) ref.Val {
+					i, ok := value.(types.Int)
+					if !ok {
+						return types.ValOrErr(i, "unexpected type '%v' passed to sleep", i.Type())
+					}
+					time.Sleep(time.Duration(int64(i)) * time.Second)
+					return types.Bool(true)
 				},
 			},
 		),

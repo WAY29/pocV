@@ -5,6 +5,7 @@ go 1.16
 require (
 	github.com/WAY29/errors v1.6.0
 	github.com/bluele/gcache v0.0.2
+	github.com/dlclark/regexp2 v1.4.0
 	github.com/google/cel-go v0.9.0
 	github.com/jawher/mow.cli v1.2.0
 	github.com/logrusorgru/aurora v2.0.3+incompatible

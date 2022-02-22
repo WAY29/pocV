@@ -18,7 +18,7 @@ rules:
     expression: |
       response.raw.bcontains(b'hello world')
 
-expression: r1()
+expression: r1() && r2()
 detail:
   author: name(link)
   links:

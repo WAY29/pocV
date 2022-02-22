@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -355,19 +354,9 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	}
 
 	// 执行rule
-	// TODO: yaml读取时确保顺序(map是无序的，考虑将Rules设置为yaml.MapSlice，但是需要手动处理解析后的数据)
-	// TODO: 暂时先用排序根据ruleName确保顺序
-	rules := poc.Rules
-	ruleKeys := make([]string, len(rules))
-	i := 0
-	for k := range rules {
-		ruleKeys[i] = k
-		i++
-	}
-	sort.Strings(ruleKeys)
-
-	for _, ruleName := range ruleKeys {
-		_, err = RequestInvoke(requestFunc, ruleName, rules[ruleName])
+	ruleSlice := poc.Rules
+	for _, ruleItem := range ruleSlice {
+		_, err = RequestInvoke(requestFunc, ruleItem.Key, ruleItem.Value)
 		if err != nil {
 			return false, err
 		}

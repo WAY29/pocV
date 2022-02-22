@@ -2,13 +2,31 @@ package structs
 
 import "gopkg.in/yaml.v2"
 
+var ORDER = 0
+
 // 参考 pocassist/blob/master/poc/rule/rule.go
 // 单个规则
 type Rule struct {
 	Request    RuleRequest   `yaml:"request"`
 	Expression string        `yaml:"expression"`
 	Output     yaml.MapSlice `yaml:"output"`
+	order      int
 }
+
+type ruleAlias struct {
+	Request    RuleRequest   `yaml:"request"`
+	Expression string        `yaml:"expression"`
+	Output     yaml.MapSlice `yaml:"output"`
+}
+
+// 用于帮助yaml解析，保证Rule有序
+type RuleMapItem struct {
+	Key   string
+	Value Rule
+}
+
+// 用于帮助yaml解析，保证Rule有序
+type RuleMapSlice []RuleMapItem
 
 type RuleRequest struct {
 	Cache           bool              `yaml:"cache"`
@@ -62,11 +80,53 @@ type Payloads struct {
 }
 
 type Poc struct {
-	Name       string          `yaml:"name"`
-	Transport  string          `yaml:"transport"`
-	Set        SetMapSlice     `yaml:"set"`
-	Payloads   Payloads        `yaml:"payloads"`
-	Rules      map[string]Rule `yaml:"rules"`
-	Expression string          `yaml:"expression"`
-	Detail     Detail          `yaml:"detail"`
+	Name       string       `yaml:"name"`
+	Transport  string       `yaml:"transport"`
+	Set        SetMapSlice  `yaml:"set"`
+	Payloads   Payloads     `yaml:"payloads"`
+	Rules      RuleMapSlice `yaml:"rules"`
+	Expression string       `yaml:"expression"`
+	Detail     Detail       `yaml:"detail"`
+}
+
+func (r *Rule) UnmarshalYAML(unmarshal func(interface{}) error) error {
+
+	var tmp ruleAlias
+	if err := unmarshal(&tmp); err != nil {
+		return err
+	}
+
+	r.Request = tmp.Request
+	r.Expression = tmp.Expression
+	r.Output = tmp.Output
+	r.order = ORDER
+
+	ORDER += 1
+
+	return nil
+}
+
+func (m *RuleMapSlice) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	n := 0
+	ORDER = 0
+
+	tempMap := make(map[string]Rule, 1)
+	err := unmarshal(&tempMap)
+	if err != nil {
+		return err
+	}
+
+	newRuleSlice := make([]RuleMapItem, len(tempMap))
+
+	for roleName, role := range tempMap {
+		newRuleSlice[role.order] = RuleMapItem{
+			Key:   roleName,
+			Value: role,
+		}
+		n += 1
+	}
+
+	*m = RuleMapSlice(newRuleSlice)
+
+	return nil
 }

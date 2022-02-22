@@ -32,7 +32,7 @@ func XrayGetRuleHash(req *structs.RuleRequest) string {
 		headerStirng += fmt.Sprintf("%s%s", k, headers[k])
 	}
 
-	return utils.MD5(fmt.Sprintf("%s%s%s%s%v", req.Method, req.Path, headerStirng, req.Body, req.FollowRedirects))
+	return "rule_" + utils.MD5(fmt.Sprintf("%s%s%s%s%v", req.Method, req.Path, headerStirng, req.Body, req.FollowRedirects))
 }
 
 func XraySetRequestResponseCache(ruleReq *structs.RuleRequest, request *http.Request, protoRequest *structs.Request, protoResponse *structs.Response) bool {

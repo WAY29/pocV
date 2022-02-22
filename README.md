@@ -1,6 +1,5 @@
 # pocV
-一个兼容xray V2 poc和nuclei的poc扫描框架，某知识星球作业
-A compatible with xray and nuclei poc framework
+一个兼容xray V2 poc和nuclei的poc扫描框架，某知识星球作业(A compatible with xray and nuclei poc framework)
 
 ## Feature
 - 支持请求缓存，加快请求速度 (Support request caching to speed up requests)

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/WAY29/pocV/internal/common/errors"
 	nuclei_parse "github.com/WAY29/pocV/pkg/nuclei/parse"
 	nuclei_structs "github.com/WAY29/pocV/pkg/nuclei/structs"
 	xray_parse "github.com/WAY29/pocV/pkg/xray/parse"
@@ -72,7 +73,8 @@ func LoadPocs(pocs *[]string, pocPaths *[]string) (map[string]xray_structs.Poc, 
 			}
 
 			if err != nil {
-				utils.ErrorP(err)
+				wrappedErr := errors.Wrap(err, "Can't parse poc error: ")
+				utils.ErrorP(wrappedErr)
 			}
 
 		} else {
@@ -98,6 +100,8 @@ func LoadPocs(pocs *[]string, pocPaths *[]string) (map[string]xray_structs.Poc, 
 		}
 
 	}
+
+	utils.DebugF("Load [%d] xray poc, [%d] nuclei poc", len(xrayPocMap), len(nucleiPocMap))
 
 	return xrayPocMap, nucleiPocMap
 }

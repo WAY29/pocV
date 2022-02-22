@@ -1,5 +1,5 @@
 # pocV
-一个兼容xray V2 http poc和nuclei的poc扫描框架，某知识星球作业
+一个兼容xray V2 poc和nuclei的poc扫描框架，某知识星球作业
 A compatible with xray and nuclei poc framework
 
 ## Feature
@@ -13,6 +13,7 @@ A compatible with xray and nuclei poc framework
 - 代码未经过大量测试，仅供学习 (The code is not heavily tested, just for learning)
 ## TODO
 - [x] xrayV2 http poc
+- [x] xrayV2 tcp/udp poc
 - [x] nuclei
 - [x] 使用tag筛选poc (Filter the poc through tags)
 ## Reference

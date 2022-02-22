@@ -100,7 +100,7 @@ func LoadPocs(pocs *[]string, pocPaths *[]string) (map[string]xray_structs.Poc, 
 
 	}
 
-	utils.DebugF("Load [%d] xray poc, [%d] nuclei poc", len(xrayPocMap), len(nucleiPocMap))
+	utils.InfoF("Load [%d] xray poc(s), [%d] nuclei poc(s)", len(xrayPocMap), len(nucleiPocMap))
 
 	return xrayPocMap, nucleiPocMap
 }

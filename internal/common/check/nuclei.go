@@ -17,7 +17,7 @@ func executeNucleiPoc(target string, poc *nuclei_structs.Poc) (results []*output
 		}
 	}()
 
-	utils.DebugF("Run Nuclei Poc %s[%s]", target, poc.Info.Name)
+	utils.DebugF("Run Nuclei Poc[%s] for %s", poc.Info.Name, target)
 
 	e := poc.Executer
 	results = make([]*output.ResultEvent, 0, e.Requests())

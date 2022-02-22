@@ -83,7 +83,12 @@ func cmdRun(cmd *cli.Cmd) {
 		xrayTotalReqeusts := 0
 		totalTargets := len(targets)
 		for _, poc := range xrayPocs {
-			xrayTotalReqeusts += totalTargets * len(poc.Rules)
+			ruleLens := len(poc.Rules)
+			// 额外需要缓存connectionID
+			if poc.Transport == "tcp" || poc.Transport == "udp" {
+				ruleLens += 1
+			}
+			xrayTotalReqeusts += totalTargets * ruleLens
 		}
 		if xrayTotalReqeusts == 0 {
 			xrayTotalReqeusts = 1

@@ -79,6 +79,8 @@ func End() {
 // 核心代码，poc检测
 func check(taskInterface interface{}) {
 	var (
+		oRequest *http.Request = nil
+
 		isVul   bool
 		err     error
 		pocName string
@@ -98,9 +100,11 @@ func check(taskInterface interface{}) {
 		target, poc := task.Target, task.Poc
 
 		pocName = poc.Name
-		req, _ := http.NewRequest("GET", target, nil)
+		if poc.Transport != "tcp" && poc.Transport != "udp" {
+			oRequest, _ = http.NewRequest("GET", target, nil)
+		}
 
-		isVul, err = executeXrayPoc(req, &poc)
+		isVul, err = executeXrayPoc(oRequest, target, &poc)
 		if err != nil {
 			utils.ErrorP(err)
 			return

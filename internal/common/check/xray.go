@@ -2,10 +2,14 @@ package check
 
 import (
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/WAY29/pocV/internal/common/errors"
 	"github.com/WAY29/pocV/pkg/xray/cel"
@@ -15,7 +19,9 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err error) {
+type RequestFuncType func(ruleName string, rule xray_structs.Rule) error
+
+func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (isVul bool, err error) {
 	isVul = false
 
 	defer func() {
@@ -26,15 +32,25 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 	}()
 
 	var (
-		milliseconds  int64
-		Request       *http.Request
-		Response      *http.Response
+		milliseconds int64
+		tcpudpType   string = ""
+
+		request       *http.Request
+		response      *http.Response
 		protoRequest  *xray_structs.Request
 		protoResponse *xray_structs.Response
-		oReqUrlString = oReq.URL.String()
+
+		oReqUrlString string
+
+		requestFunc RequestFuncType
 	)
 
-	utils.DebugF("Run Xray Poc %s[%s]", oReqUrlString, poc.Name)
+	// 初始赋值
+	if oReq != nil {
+		oReqUrlString = oReq.URL.String()
+	}
+
+	utils.DebugF("Run Xray Poc[%s] for %s", poc.Name, target)
 
 	c := cel.NewEnvOption()
 	env, err := cel.NewEnv(&c)
@@ -124,12 +140,12 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 	vulnerability.ID = render(vulnerability.ID)
 	vulnerability.Match = render(vulnerability.Match)
 
-	// 处理Rule中的单条request
-	RequestInvoke := func(ruleName string, rule xray_structs.Rule) (bool, error) {
+	// transport=http: request处理
+	HttpRequestInvoke := func(ruleName string, rule xray_structs.Rule) error {
 		var (
-			flag, ok bool
-			err      error
-			ruleReq  xray_structs.RuleRequest = rule.Request
+			ok      bool
+			err     error
+			ruleReq xray_structs.RuleRequest = rule.Request
 		)
 
 		// 渲染请求头，请求路径和请求体
@@ -140,13 +156,12 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 		ruleReq.Body = render(strings.TrimSpace(ruleReq.Body))
 
 		// 尝试获取缓存
-		if Request, protoRequest, protoResponse, ok = requests.XrayGetRequestResponseCache(&ruleReq); !ok || !rule.Request.Cache {
+		if request, protoRequest, protoResponse, ok = requests.XrayGetHttpRequestCache(&ruleReq); !ok || !rule.Request.Cache {
 			// 获取protoRequest
-			protoRequest, err = requests.ParseRequest(oReq)
+			protoRequest, err = requests.ParseHttpRequest(oReq)
 			if err != nil {
 				wrappedErr := errors.Wrapf(err, "Run poc[%v] parse request error", poc.Name)
-				utils.ErrorP(wrappedErr)
-				return false, err
+				return wrappedErr
 			}
 
 			// 处理Path
@@ -161,34 +176,136 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 			protoRequest.Url.Path = strings.ReplaceAll(protoRequest.Url.Path, "+", "%20")
 
 			// 克隆请求对象
-			Request, _ = http.NewRequest(ruleReq.Method, fmt.Sprintf("%s://%s%s", protoRequest.Url.Scheme, protoRequest.Url.Host, protoRequest.Url.Path), strings.NewReader(ruleReq.Body))
+			request, _ = http.NewRequest(ruleReq.Method, fmt.Sprintf("%s://%s%s", protoRequest.Url.Scheme, protoRequest.Url.Host, protoRequest.Url.Path), strings.NewReader(ruleReq.Body))
 
-			Request.Header = oReq.Header.Clone()
+			request.Header = oReq.Header.Clone()
 			rawHeader := ""
 			for k, v := range ruleReq.Headers {
-				Request.Header.Set(k, v)
+				request.Header.Set(k, v)
 				rawHeader += fmt.Sprintf("%s=%s\n", k, v)
 			}
 			protoRequest.RawHeader = []byte(strings.Trim(rawHeader, "\n"))
 
 			// 发起请求
-			Response, milliseconds, err = requests.DoRequest(Request, ruleReq.FollowRedirects)
+			response, milliseconds, err = requests.DoRequest(request, ruleReq.FollowRedirects)
 			if err != nil {
-				return false, err
+				return err
 			}
 
 			// 获取protoResponse
-			protoResponse, err = requests.ParseResponse(Response, milliseconds)
+			protoResponse, err = requests.ParseHttpResponse(response, milliseconds)
 			if err != nil {
 				wrappedErr := errors.Wrapf(err, "Run poc[%s] parse response error", poc.Name)
-				utils.ErrorP(wrappedErr)
-				return false, err
+				return wrappedErr
 			}
 
 			// 设置缓存
-			requests.XraySetRequestResponseCache(&ruleReq, Request, protoRequest, protoResponse)
+			requests.XraySetHttpRequestCache(&ruleReq, request, protoRequest, protoResponse)
 		} else {
-			utils.DebugF("Hit request cache [%s%s]", oReqUrlString, ruleReq.Path)
+			utils.DebugF("Hit http request cache[%s%s]", oReqUrlString, ruleReq.Path)
+		}
+
+		return nil
+	}
+
+	// transport=tcp/udp: request处理
+	TCPUDPRequestInvoke := func(ruleName string, rule xray_structs.Rule) error {
+		var (
+			tcpudpTypeUpper = strings.ToUpper(tcpudpType)
+			buffer          = make([]byte, 1024)
+
+			content             = rule.Request.Content
+			connectionID string = rule.Request.ConnectionID
+			conn         net.Conn
+			connCache    *net.Conn
+			responseRaw  []byte
+			readTimeout  int
+
+			ok  bool
+			err error
+		)
+
+		// 获取response缓存
+		if responseRaw, protoResponse, ok = requests.XrayGetTcpUdpResponseCache(rule.Request.Content); !ok || !rule.Request.Cache {
+			responseRaw = make([]byte, 0, 8192)
+			// 获取connectionID缓存
+			if connCache, ok = requests.XrayGetTcpUdpConnectionCache(connectionID); !ok {
+				// 处理timeout
+				readTimeout, err = strconv.Atoi(rule.Request.ReadTimeout)
+				if err != nil {
+					wrappedErr := errors.Wrapf(err, "Parse read_timeout[%s] to int  error", rule.Request.ReadTimeout)
+					return wrappedErr
+				}
+
+				// 发起连接
+				conn, err = net.Dial(tcpudpType, target)
+				if err != nil {
+					wrappedErr := errors.Wrapf(err, "%s connect to target[%s] error", tcpudpTypeUpper, target)
+					return wrappedErr
+				}
+
+				// 设置读取超时
+				err := conn.SetReadDeadline(time.Now().Add(time.Duration(readTimeout) * time.Second))
+				if err != nil {
+					wrappedErr := errors.Wrapf(err, "Set read_timeout[%d] error", tcpudpTypeUpper, readTimeout)
+					return wrappedErr
+				}
+
+				// 设置连接缓存
+				requests.XraySetTcpUdpConnectionCache(connectionID, &conn)
+			} else {
+				conn = *connCache
+				utils.DebugF("Hit connection_id cache[%s]", connectionID)
+			}
+
+			// 获取protoRequest
+			protoRequest, _ = requests.ParseTCPUDPRequest([]byte(content))
+
+			// 发送数据
+			_, err = conn.Write([]byte(content))
+			if err != nil {
+				wrappedErr := errors.Wrapf(err, "%s[%s] write error", tcpudpTypeUpper, connectionID)
+				return wrappedErr
+			}
+
+			// 接收数据
+			for {
+				n, err := conn.Read(buffer)
+				if err != nil {
+					if err == io.EOF {
+					} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					} else {
+						wrappedErr := errors.Wrapf(err, "%s[%s] read error", tcpudpTypeUpper, connectionID)
+						return wrappedErr
+					}
+					break
+				}
+				responseRaw = append(responseRaw, buffer[:n]...)
+			}
+
+			// 获取protoResponse
+			protoResponse, _ = requests.ParseTCPUDPResponse(responseRaw, &conn, tcpudpType)
+
+			// 设置响应缓存
+			requests.XraySetTcpUdpResponseCache(content, responseRaw, protoResponse)
+
+		} else {
+			utils.DebugF("Hit tcp/udp request cache[%s]", responseRaw)
+		}
+
+		return nil
+	}
+
+	// reqeusts总处理
+	RequestInvoke := func(requestFunc RequestFuncType, ruleName string, rule xray_structs.Rule) (bool, error) {
+		var (
+			flag bool
+			ok   bool
+			err  error
+		)
+		err = requestFunc(ruleName, rule)
+		if err != nil {
+			return false, err
 		}
 
 		variableMap["request"] = protoRequest
@@ -202,14 +319,12 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 		env, err = cel.NewEnv(&c)
 		if err != nil {
 			wrappedErr := errors.Wrap(err, "Environment re-creation error")
-			utils.ErrorP(wrappedErr)
 			return false, wrappedErr
 		}
 		out, err := cel.Evaluate(env, rule.Expression, variableMap)
 
 		if err != nil {
 			wrappedErr := errors.Wrapf(err, "Evalute rule[%s] expression error: %s", ruleName, rule.Expression)
-			utils.ErrorP(wrappedErr)
 			return false, wrappedErr
 		}
 
@@ -228,6 +343,17 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 		return flag, nil
 	}
 
+	// 判断transport类型，设置requestInvoke
+	if poc.Transport == "tcp" {
+		tcpudpType = "tcp"
+		requestFunc = TCPUDPRequestInvoke
+	} else if poc.Transport == "udp" {
+		tcpudpType = "udp"
+		requestFunc = TCPUDPRequestInvoke
+	} else {
+		requestFunc = HttpRequestInvoke
+	}
+
 	// 执行rule
 	// TODO: yaml读取时确保顺序(map是无序的，考虑将Rules设置为yaml.MapSlice，但是需要手动处理解析后的数据)
 	// TODO: 暂时先用排序根据ruleName确保顺序
@@ -241,7 +367,10 @@ func executeXrayPoc(oReq *http.Request, poc *xray_structs.Poc) (isVul bool, err 
 	sort.Strings(ruleKeys)
 
 	for _, ruleName := range ruleKeys {
-		_, err = RequestInvoke(ruleName, rules[ruleName])
+		_, err = RequestInvoke(requestFunc, ruleName, rules[ruleName])
+		if err != nil {
+			return false, err
+		}
 	}
 
 	// 判断poc总体表达式结果

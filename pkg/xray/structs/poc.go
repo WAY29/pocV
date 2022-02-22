@@ -17,6 +17,9 @@ type RuleRequest struct {
 	Headers         map[string]string `yaml:"headers"`
 	Body            string            `yaml:"body"`
 	FollowRedirects bool              `yaml:"follow_redirects"`
+	Content         string            `yaml:"content"`
+	ReadTimeout     string            `yaml:"read_timeout"`
+	ConnectionID    string            `yaml:"connection_id"`
 }
 
 type Infos struct {

@@ -39,7 +39,7 @@ type CustomLib struct {
 
 // 执行表达式
 func Evaluate(env *cel.Env, expression string, params map[string]interface{}) (ref.Val, error) {
-	utils.DebugF("Evaluate expression: %s", expression)
+	utils.DebugF("Evaluate expression: %s", strings.TrimSpace(expression))
 
 	ast, iss := env.Compile(expression)
 	err := iss.Err()

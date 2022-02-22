@@ -120,12 +120,12 @@ func DoRequest(req *http.Request, redirect bool) (*http.Response, int64, error) 
 	return oResp, milliseconds, nil
 }
 
-func ParseRequest(oReq *http.Request) (*structs.Request, error) {
+func ParseHttpRequest(oReq *http.Request) (*structs.Request, error) {
 	var (
 		header    string
 		rawHeader string = ""
+		req              = &structs.Request{}
 	)
-	req := &structs.Request{}
 
 	req.Method = oReq.Method
 	req.Url = ParseUrl(oReq.URL)
@@ -156,9 +156,9 @@ func ParseRequest(oReq *http.Request) (*structs.Request, error) {
 	return req, nil
 }
 
-func ParseResponse(oResp *http.Response, milliseconds int64) (*structs.Response, error) {
+func ParseHttpResponse(oResp *http.Response, milliseconds int64) (*structs.Response, error) {
 	var (
-		resp structs.Response
+		resp *structs.Response = &structs.Response{}
 		err  error
 	)
 
@@ -185,7 +185,65 @@ func ParseResponse(oResp *http.Response, milliseconds int64) (*structs.Response,
 
 	resp.Latency = milliseconds
 
-	return &resp, nil
+	return resp, nil
+}
+
+func ParseTCPUDPRequest(content []byte) (*structs.Request, error) {
+	var (
+		req = &structs.Request{}
+	)
+
+	req.Raw = content
+
+	return req, nil
+}
+
+func ParseTCPUDPResponse(content []byte, socket *net.Conn, transport string) (*structs.Response, error) {
+	var (
+		resp       *structs.Response     = &structs.Response{}
+		conn       *structs.ConnInfoType = &structs.ConnInfoType{}
+		connection                       = *socket
+
+		addr     string
+		addrList []string
+		port     string
+	)
+
+	resp.Raw = content
+
+	// source
+	addr = connection.LocalAddr().String()
+	addrList = strings.SplitN(addr, ":", 2)
+	if len(addrList) == 2 {
+		port = addrList[1]
+	} else {
+		port = ""
+	}
+
+	conn.Source = &structs.AddrType{
+		Transport: transport,
+		Addr:      addr,
+		Port:      port,
+	}
+
+	// destination
+	addr = connection.RemoteAddr().String()
+	addrList = strings.SplitN(addr, ":", 2)
+	if len(addrList) == 2 {
+		port = addrList[1]
+	} else {
+		port = ""
+	}
+
+	conn.Destination = &structs.AddrType{
+		Transport: transport,
+		Addr:      addr,
+		Port:      port,
+	}
+
+	resp.Conn = conn
+
+	return resp, nil
 }
 
 func GetRespBody(oResp *http.Response) ([]byte, error) {

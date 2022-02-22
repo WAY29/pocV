@@ -119,6 +119,10 @@ func init() {
 }
 
 func main() {
+	// 输出banner
+	utils.Banner()
+
+	// 解析参数
 	app = cli.App("pocV", "Powerful poc framework, adapted to Xray and Nuclei POC")
 	app.Command("tag", "Add tag(s) for poc(s)", cmdTag)
 	app.Command("run", "Run to test poc", cmdRun)

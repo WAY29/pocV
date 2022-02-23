@@ -8,7 +8,6 @@
 - 支持update子命令实现自我更新 (Support update subcommand to self-update)
 
 ## Short
-- 支持大部分xray的函数，但不支持冷门函数: `faviconHash`，`toUintString` (Most xray functions are supported, but not the less popular ones: `faviconHash()`，`toUintString()`)
 - 代码未经过大量测试，仅供学习 (The code is not heavily tested, just for learning)
 ## TODO
 - [x] xrayV2 http poc

@@ -34,6 +34,8 @@ func LoadTargets(target *[]string, targetFiles *[]string) []string {
 		}
 	}
 
+	utils.InfoF("Load [%d] target(s)", len(targetsSlice))
+
 	// 检查目标是否是合法的url， 废弃
 	// for _, target := range targetsSlice {
 	// 	_, err := url.ParseRequestURI(target)

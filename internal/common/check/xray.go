@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/WAY29/pocV/internal/common/errors"
@@ -17,6 +18,24 @@ import (
 	xray_structs "github.com/WAY29/pocV/pkg/xray/structs"
 	"github.com/WAY29/pocV/utils"
 	"gopkg.in/yaml.v2"
+)
+
+var (
+	BodyBufPool = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 1024)
+		},
+	}
+	BodyPool = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 4096)
+		},
+	}
+	VariableMapPool = sync.Pool{
+		New: func() interface{} {
+			return make(map[string]interface{})
+		},
+	}
 )
 
 type RequestFuncType func(ruleName string, rule xray_structs.Rule) error
@@ -77,7 +96,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	}
 
 	// 请求中的全局变量
-	variableMap := make(map[string]interface{})
+	variableMap := VariableMapPool.Get().(map[string]interface{})
 
 	// 定义渲染函数
 	render := func(v string) string {
@@ -106,7 +125,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 			}
 			env, err = cel.NewEnv(&c)
 			if err != nil {
-				wrappedErr := errors.Wrap(err, "Environment re-creation error")
+				wrappedErr := errors.Newf(errors.EnvInitializationError, "Environment re-creation error: %v", err)
 				utils.ErrorP(wrappedErr)
 				return
 			}
@@ -232,7 +251,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	TCPUDPRequestInvoke := func(ruleName string, rule xray_structs.Rule) error {
 		var (
 			tcpudpTypeUpper = strings.ToUpper(tcpudpType)
-			buffer          = make([]byte, 1024)
+			buffer          = BodyBufPool.Get().([]byte)
 
 			content             = rule.Request.Content
 			connectionID string = rule.Request.ConnectionID
@@ -247,7 +266,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 
 		// 获取response缓存
 		if responseRaw, protoResponse, ok = requests.XrayGetTcpUdpResponseCache(rule.Request.Content); !ok || !rule.Request.Cache {
-			responseRaw = make([]byte, 0, 8192)
+			responseRaw = BodyPool.Get().([]byte)
 			// 获取connectionID缓存
 			if connCache, ok = requests.XrayGetTcpUdpConnectionCache(connectionID); !ok {
 				// 处理timeout

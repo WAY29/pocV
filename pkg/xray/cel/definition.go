@@ -8,19 +8,17 @@ import (
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
-func NewFunctionDefineOptions(reg ref.TypeRegistry) []cel.EnvOption {
-	strStrMapType := decls.NewMapType(decls.String, decls.Bytes)
+var (
+	StrStrMapType = decls.NewMapType(decls.String, decls.Bytes)
 
-	return []cel.EnvOption{
-		cel.CustomTypeAdapter(reg),
-		cel.CustomTypeProvider(reg),
+	StandradEnvOptions = []cel.EnvOption{
 		cel.Container("structs"),
 		cel.Types(
 			&structs.UrlType{},
 			&structs.Request{},
 			&structs.Response{},
 			&structs.Reverse{},
-			strStrMapType,
+			StrStrMapType,
 		),
 		cel.Declarations(
 			decls.NewVar("request", decls.NewObjectType("structs.Request")),
@@ -47,7 +45,7 @@ func NewFunctionDefineOptions(reg ref.TypeRegistry) []cel.EnvOption {
 			decls.NewFunction("submatch",
 				decls.NewInstanceOverload("string_submatch_string",
 					[]*exprpb.Type{decls.String, decls.String},
-					strStrMapType,
+					StrStrMapType,
 				)),
 			decls.NewFunction("bmatches",
 				decls.NewInstanceOverload("string_bmatches_bytes",
@@ -56,7 +54,7 @@ func NewFunctionDefineOptions(reg ref.TypeRegistry) []cel.EnvOption {
 			decls.NewFunction("bsubmatch",
 				decls.NewInstanceOverload("string_bsubmatch_bytes",
 					[]*exprpb.Type{decls.String, decls.Bytes},
-					strStrMapType,
+					StrStrMapType,
 				)),
 			decls.NewFunction("wait",
 				decls.NewInstanceOverload("reverse_wait_int",
@@ -132,4 +130,15 @@ func NewFunctionDefineOptions(reg ref.TypeRegistry) []cel.EnvOption {
 					decls.String)),
 		),
 	}
+)
+
+func NewFunctionDefineOptions(reg ref.TypeRegistry) []cel.EnvOption {
+
+	newOptions := []cel.EnvOption{
+		cel.CustomTypeAdapter(reg),
+		cel.CustomTypeProvider(reg),
+	}
+	newOptions = append(newOptions, StandradEnvOptions...)
+
+	return newOptions
 }

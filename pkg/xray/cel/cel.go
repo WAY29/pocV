@@ -2,6 +2,7 @@ package cel
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/WAY29/pocV/internal/common/errors"
 
@@ -14,6 +15,14 @@ import (
 	"github.com/google/cel-go/interpreter/functions"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"gopkg.in/yaml.v2"
+)
+
+var (
+	CustomLibPool = sync.Pool{
+		New: func() interface{} {
+			return CustomLib{}
+		},
+	}
 )
 
 // 自定义Lib库，包含变量和函数
@@ -51,6 +60,7 @@ func Evaluate(env *cel.Env, expression string, params map[string]interface{}) (r
 
 func UrlTypeToString(u *structs.UrlType) string {
 	var buf strings.Builder
+
 	if u.Scheme != "" {
 		buf.WriteString(u.Scheme)
 		buf.WriteByte(':')
@@ -65,7 +75,7 @@ func UrlTypeToString(u *structs.UrlType) string {
 	}
 	path := u.Path
 	if path != "" && path[0] != '/' && u.Host != "" {
-		buf.WriteByte('/')
+		buf.WriteString("/")
 	}
 	if buf.Len() == 0 {
 		if i := strings.IndexByte(path, ':'); i > -1 && strings.IndexByte(path[:i], '/') == -1 {
@@ -90,7 +100,7 @@ func NewEnv(c *CustomLib) (*cel.Env, error) {
 }
 
 func NewEnvOption() CustomLib {
-	c := CustomLib{}
+	c := CustomLibPool.Get().(CustomLib)
 	reg := types.NewEmptyRegistry()
 
 	c.envOptions = NewFunctionDefineOptions(reg)

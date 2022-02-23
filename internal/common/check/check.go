@@ -12,7 +12,6 @@ import (
 	common_structs "github.com/WAY29/pocV/pkg/common/structs"
 	nuclei_structs "github.com/WAY29/pocV/pkg/nuclei/structs"
 	"github.com/WAY29/pocV/pkg/xray/requests"
-	"github.com/WAY29/pocV/pkg/xray/structs"
 	xray_structs "github.com/WAY29/pocV/pkg/xray/structs"
 	"github.com/WAY29/pocV/utils"
 
@@ -20,6 +19,8 @@ import (
 )
 
 var (
+	EmptyLinks = []string{}
+
 	Ticker  *time.Ticker
 	Pool    *ants.PoolWithFunc
 	Verbose bool
@@ -27,6 +28,12 @@ var (
 	WaitGroup sync.WaitGroup
 
 	OutputChannel chan common_structs.Result
+
+	PocResultPool = sync.Pool{
+		New: func() interface{} {
+			return new(common_structs.PocResult)
+		},
+	}
 )
 
 // 初始化协程池
@@ -110,15 +117,16 @@ func check(taskInterface interface{}) {
 			return
 		}
 
-		OutputChannel <- &common_structs.PocResult{
-			Str:            fmt.Sprintf("%s (%s)", target, pocName),
-			Success:        isVul,
-			URL:            target,
-			PocName:        poc.Name,
-			PocLink:        poc.Detail.Links,
-			PocAuthor:      poc.Detail.Author,
-			PocDescription: poc.Detail.Description,
-		}
+		pocResult := PocResultPool.Get().(*common_structs.PocResult)
+		pocResult.Str = fmt.Sprintf("%s (%s)", target, pocName)
+		pocResult.Success = isVul
+		pocResult.URL = target
+		pocResult.PocName = poc.Name
+		pocResult.PocLink = poc.Detail.Links
+		pocResult.PocAuthor = poc.Detail.Author
+		pocResult.PocDescription = poc.Detail.Description
+
+		OutputChannel <- pocResult
 
 	case *nuclei_structs.Task:
 		var (
@@ -154,15 +162,16 @@ func check(taskInterface interface{}) {
 				desc = r.TemplateID + ":" + r.MatcherName
 			}
 
-			OutputChannel <- &common_structs.PocResult{
-				Str:            fmt.Sprintf("%s (%s) ", r.Matched, r.TemplateID),
-				Success:        isVul,
-				URL:            r.Matched,
-				PocName:        r.TemplateID,
-				PocLink:        []string{},
-				PocAuthor:      author,
-				PocDescription: desc,
-			}
+			pocResult := PocResultPool.Get().(*common_structs.PocResult)
+			pocResult.Str = fmt.Sprintf("%s (%s) ", r.Matched, r.TemplateID)
+			pocResult.Success = isVul
+			pocResult.URL = r.Matched
+			pocResult.PocName = r.TemplateID
+			pocResult.PocLink = EmptyLinks
+			pocResult.PocAuthor = author
+			pocResult.PocDescription = desc
+
+			OutputChannel <- pocResult
 		}
 	}
 
@@ -172,10 +181,10 @@ func check(taskInterface interface{}) {
 func xrayNewReverse() *xray_structs.Reverse {
 	var urlStr string
 	switch common_structs.ReversePlatformType {
-	case structs.ReverseType_Ceye:
+	case xray_structs.ReverseType_Ceye:
 		sub := utils.RandomStr(utils.AsciiLowercaseAndDigits, 8)
-		urlStr = fmt.Sprintf("http://%s.%s", sub, common_structs.CeyeDomain)
-	case structs.ReverseType_DnslogCN:
+		urlStr = fmt.Sprintf("http://%s.%s/", sub, common_structs.CeyeDomain)
+	case xray_structs.ReverseType_DnslogCN:
 		dnslogCnRequest := common_structs.DnslogCNGetDomainRequest
 		resp, _, err := requests.DoRequest(dnslogCnRequest, false)
 		if err != nil {
@@ -184,7 +193,7 @@ func xrayNewReverse() *xray_structs.Reverse {
 			return &xray_structs.Reverse{}
 		}
 		content, _ := requests.GetRespBody(resp)
-		urlStr = "http://" + string(content)
+		urlStr = "http://" + string(content) + "/"
 	default:
 		return &xray_structs.Reverse{}
 	}

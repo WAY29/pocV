@@ -15,6 +15,7 @@ require (
 	github.com/remeh/sizedwaitgroup v1.0.0
 	github.com/rhysd/go-github-selfupdate v1.2.3
 	github.com/sirupsen/logrus v1.8.1
+	github.com/spaolacci/murmur3 v1.1.0
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2
 	go.uber.org/ratelimit v0.2.0
 	google.golang.org/genproto v0.0.0-20220217155828-d576998c0009

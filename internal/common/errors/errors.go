@@ -11,6 +11,7 @@ type ErrorType uint16
 const (
 	Unknown ErrorType = iota
 	ConvertInterfaceError
+	EnvInitializationError
 	CompileError
 	ProgramCreationError
 	EvaluationError

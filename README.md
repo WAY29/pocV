@@ -49,13 +49,13 @@ run
 # run single poc
 pocV run -t http://example.com -p ./pocs/test/xray/rule_test.yml
 # run multiple pocs
-pocV run -t http://example.com -P ./pocs/test/nuclei/*
-pocV run -t http://example.com -P ./pocs/nuclei/*
-pocV run -t http://example.com -P ./pocs/xray/pocs/*
+pocV run -t http://example.com -P "./pocs/test/nuclei/*"
+pocV run -t http://example.com -P "./pocs/nuclei/*"
+pocV run -t http://example.com -P "./pocs/xray/pocs/*"
 # Specify multiple targets
 pocV run -T target.txt -p ./pocs/test/xray/rule_test.yml
 # Filter the poc through tags
-pocV run -T target.txt --tag test -p ./pocs/test/xray/*
+pocV run -T target.txt --tag test -p "./pocs/test/xray/*"
 ```
 tag
 ```bash

@@ -136,12 +136,10 @@ func NewEnvOption() CustomLib {
 				decls.NewInstanceOverload("icontains_string",
 					[]*exprpb.Type{decls.String, decls.String},
 					decls.Bool)),
-			// TODO: implement
 			decls.NewFunction("bstartsWith",
 				decls.NewInstanceOverload("bytes_bstartsWith_bytes",
 					[]*exprpb.Type{decls.Bytes, decls.Bytes},
 					decls.Bool)),
-			// TODO: implement
 			decls.NewFunction("submatch",
 				decls.NewInstanceOverload("string_submatch_string",
 					[]*exprpb.Type{decls.String, decls.String},
@@ -151,7 +149,6 @@ func NewEnvOption() CustomLib {
 				decls.NewInstanceOverload("string_bmatches_bytes",
 					[]*exprpb.Type{decls.String, decls.Bytes},
 					decls.Bool)),
-			// TODO: implement
 			decls.NewFunction("bsubmatch",
 				decls.NewInstanceOverload("string_bsubmatch_bytes",
 					[]*exprpb.Type{decls.String, decls.Bytes},
@@ -217,7 +214,6 @@ func NewEnvOption() CustomLib {
 				decls.NewOverload("printable_string",
 					[]*exprpb.Type{decls.String},
 					decls.String)),
-			// TODO: implement
 			decls.NewFunction("sleep",
 				decls.NewOverload("sleep_int",
 					[]*exprpb.Type{decls.Int},

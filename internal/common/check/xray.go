@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -182,7 +181,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 
 			// 处理Path
 			if strings.HasPrefix(ruleReq.Path, "/") {
-				protoRequest.Url.Path = path.Join(oReq.URL.Path, ruleReq.Path)
+				protoRequest.Url.Path = oReq.URL.Path + ruleReq.Path[1:]
 			} else if strings.HasPrefix(ruleReq.Path, "^") {
 				protoRequest.Url.Path = ruleReq.Path[1:]
 			}

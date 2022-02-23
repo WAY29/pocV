@@ -34,6 +34,12 @@ var (
 			return new(common_structs.PocResult)
 		},
 	}
+
+	ReversePool = sync.Pool{
+		New: func() interface{} {
+			return new(xray_structs.Reverse)
+		},
+	}
 )
 
 // 初始化协程池
@@ -178,8 +184,12 @@ func check(taskInterface interface{}) {
 }
 
 // xray dns反连平台 目前只支持dnslog.cn和ceye.io
-func xrayNewReverse() *xray_structs.Reverse {
-	var urlStr string
+func xrayNewReverse() (reverse *xray_structs.Reverse) {
+	var (
+		urlStr string
+	)
+	reverse = ReversePool.Get().(*xray_structs.Reverse)
+
 	switch common_structs.ReversePlatformType {
 	case xray_structs.ReverseType_Ceye:
 		sub := utils.RandomStr(utils.AsciiLowercaseAndDigits, 8)
@@ -190,22 +200,22 @@ func xrayNewReverse() *xray_structs.Reverse {
 		if err != nil {
 			wrappedErr := errors.Wrap(err, "Get reverse domain error: Can't get domain from dnslog.cn")
 			utils.ErrorP(wrappedErr)
-			return &xray_structs.Reverse{}
+			return
 		}
 		content, _ := requests.GetRespBody(resp)
 		urlStr = "http://" + string(content) + "/"
 	default:
-		return &xray_structs.Reverse{}
+		return
 	}
 
 	u, _ := url.Parse(urlStr)
 	utils.DebugF("Get reverse domain: %s", u.Hostname())
 
-	return &xray_structs.Reverse{
-		Url:                requests.ParseUrl(u),
-		Domain:             u.Hostname(),
-		Ip:                 "",
-		IsDomainNameServer: false,
-		ReverseType:        common_structs.ReversePlatformType,
-	}
+	reverse.Url = requests.ParseUrl(u)
+	reverse.Domain = u.Hostname()
+	reverse.Ip = u.Host
+	reverse.IsDomainNameServer = false
+	reverse.ReverseType = common_structs.ReversePlatformType
+
+	return
 }

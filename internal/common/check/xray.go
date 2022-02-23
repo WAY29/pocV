@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -51,6 +52,22 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 
 	utils.DebugF("Run Xray Poc[%s] for %s", poc.Name, target)
 
+	// 判断transport，如果不合法则跳过
+	transport := poc.Transport
+	if transport == "tcp" || transport == "udp" {
+		if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
+			utils.InfoF("Invalid target[%s], skip", target)
+			return
+		}
+	} else {
+		_, err = url.ParseRequestURI(target)
+		if err != nil {
+			utils.InfoF("Invalid target[%s], skip", target)
+			return
+		}
+	}
+
+	// 初始化cel-go环境
 	c := cel.NewEnvOption()
 	env, err := cel.NewEnv(&c)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"strconv"
 	"strings"
@@ -193,6 +194,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 			// 克隆请求对象
 			request, _ = http.NewRequest(ruleReq.Method, fmt.Sprintf("%s://%s%s", protoRequest.Url.Scheme, protoRequest.Url.Host, protoRequest.Url.Path), strings.NewReader(ruleReq.Body))
 
+			// 处理请求头
 			request.Header = oReq.Header.Clone()
 			rawHeader := ""
 			for k, v := range ruleReq.Headers {
@@ -200,6 +202,9 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 				rawHeader += fmt.Sprintf("%s=%s\n", k, v)
 			}
 			protoRequest.RawHeader = []byte(strings.Trim(rawHeader, "\n"))
+
+			// 额外处理protoRequest.Raw
+			protoRequest.Raw, _ = httputil.DumpRequestOut(request, true)
 
 			// 发起请求
 			response, milliseconds, err = requests.DoRequest(request, ruleReq.FollowRedirects)

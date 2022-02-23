@@ -151,8 +151,6 @@ func ParseHttpRequest(oReq *http.Request) (*structs.Request, error) {
 		oReq.Body = ioutil.NopCloser(bytes.NewBuffer(data))
 	}
 
-	req.Raw, _ = httputil.DumpRequestOut(oReq, true)
-
 	return req, nil
 }
 

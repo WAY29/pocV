@@ -107,7 +107,6 @@ func (r *Rule) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 func (m *RuleMapSlice) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	n := 0
 	ORDER = 0
 
 	tempMap := make(map[string]Rule, 1)
@@ -123,7 +122,6 @@ func (m *RuleMapSlice) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			Key:   roleName,
 			Value: role,
 		}
-		n += 1
 	}
 
 	*m = RuleMapSlice(newRuleSlice)

@@ -14,7 +14,6 @@ import (
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/interpreter/functions"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
-	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -118,21 +117,8 @@ func (c *CustomLib) ProgramOptions() []cel.ProgramOption {
 	return c.programOptions
 }
 
-func (c *CustomLib) UpdateCompileOptions(args yaml.MapSlice) {
-	for _, item := range args {
-		k, v := item.Key.(string), item.Value.(string)
-		// 在执行之前是不知道变量的类型的，所以统一声明为字符型
-		// 所以randomInt虽然返回的是int型，在运算中却被当作字符型进行计算，需要重载string_*_string
-		var d *exprpb.Decl
-		if strings.HasPrefix(v, "randomInt") {
-			d = decls.NewVar(k, decls.Int)
-		} else if strings.HasPrefix(v, "newReverse") {
-			d = decls.NewVar(k, decls.NewObjectType("structs.Reverse"))
-		} else {
-			d = decls.NewVar(k, decls.String)
-		}
-		c.envOptions = append(c.envOptions, cel.Declarations(d))
-	}
+func (c *CustomLib) UpdateCompileOption(k string, t *exprpb.Type) {
+	c.envOptions = append(c.envOptions, cel.Declarations(decls.NewVar(k, t)))
 }
 
 func (c *CustomLib) NewResultFunction(funcName string, returnBool bool) {

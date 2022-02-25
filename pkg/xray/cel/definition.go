@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	StrStrMapType = decls.NewMapType(decls.String, decls.Bytes)
+	StrStrMapType = decls.NewMapType(decls.String, decls.String)
 
 	StandradEnvOptions = []cel.EnvOption{
 		cel.Container("structs"),

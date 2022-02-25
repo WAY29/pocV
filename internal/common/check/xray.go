@@ -17,6 +17,7 @@ import (
 	"github.com/WAY29/pocV/pkg/xray/requests"
 	xray_structs "github.com/WAY29/pocV/pkg/xray/structs"
 	"github.com/WAY29/pocV/utils"
+	"github.com/google/cel-go/checker/decls"
 	"gopkg.in/yaml.v2"
 )
 
@@ -136,25 +137,32 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 				utils.ErrorP(wrappedErr)
 				continue
 			}
+
+			// 设置variableMap并且更新CompileOption
 			switch value := out.Value().(type) {
 			case *xray_structs.UrlType:
 				variableMap[k] = cel.UrlTypeToString(value)
+				c.UpdateCompileOption(k, decls.NewObjectType("structs.UrlType"))
 			case int64:
 				variableMap[k] = int(value)
+				c.UpdateCompileOption(k, decls.Int)
+			case map[string]string:
+				variableMap[k] = out.Value()
+				c.UpdateCompileOption(k, cel.StrStrMapType)
 			default:
-				variableMap[k] = fmt.Sprintf("%v", out)
+				variableMap[k] = out.Value()
+				c.UpdateCompileOption(k, decls.String)
 			}
+
 		}
 	}
 
 	// 处理set
-	c.UpdateCompileOptions(poc.Set)
 	evaluateUpdateVariableMap(env, poc.Set)
 
 	// 处理payload
 	for _, setMapVal := range poc.Payloads.Payloads {
 		setMap := setMapVal.Value.(yaml.MapSlice)
-		c.UpdateCompileOptions(setMap)
 		evaluateUpdateVariableMap(env, setMap)
 	}
 	// 渲染detail
@@ -374,7 +382,6 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 		}
 
 		// 处理output
-		c.UpdateCompileOptions(rule.Output)
 		evaluateUpdateVariableMap(env, rule.Output)
 		// 注入名为ruleName的函数
 		c.NewResultFunction(ruleName, flag)

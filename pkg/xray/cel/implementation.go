@@ -450,6 +450,7 @@ func NewFunctionImplOptions(reg ref.TypeRegistry) []cel.ProgramOption {
 							resultMap[gp.Name] = gp.String()
 						}
 					}
+
 					return types.NewStringStringMap(reg, resultMap)
 				},
 			},

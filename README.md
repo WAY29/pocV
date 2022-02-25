@@ -20,7 +20,7 @@
 - [boyhack/w14scan](https://github.com/boy-hack)
 - [projectdiscovery/nuclei](https://github.com/projectdiscovery/nuclei)
 
-## Usage
+## Install
 ### github
 ```bash
 # install pocV
@@ -43,7 +43,7 @@ cd ./nuclei-templates && git pull && cd ../xray && git pull
 pocV update
 ```
 
-## Example
+## Usage / Quickstart
 run
 ```bash
 # run single poc

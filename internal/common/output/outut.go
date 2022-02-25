@@ -28,7 +28,7 @@ func InitOutput(file string, jsonFlag bool) (chan structs.Result, *sizedwaitgrou
 		if file != "" {
 			f, err = os.OpenFile(file, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 			if err != nil {
-				wrappedErr := errors.Newf(errors.ConvertInterfaceError, "Can't create file '%s': %#v", file, err)
+				wrappedErr := errors.Newf(errors.FileError, "Can't create file '%s': %#v", file, err)
 				utils.ErrorP(wrappedErr)
 			} else {
 				outputs = append(outputs, &structs.FileOutput{F: f, Json: jsonFlag})

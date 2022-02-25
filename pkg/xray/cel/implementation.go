@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -26,6 +27,12 @@ import (
 )
 
 var (
+	ReversePool = sync.Pool{
+		New: func() interface{} {
+			return new(structs.Reverse)
+		},
+	}
+
 	StandradProgramOption = []cel.ProgramOption{
 		cel.Functions(
 			&functions.Overload{
@@ -454,12 +461,55 @@ func NewFunctionImplOptions(reg ref.TypeRegistry) []cel.ProgramOption {
 					return types.NewStringStringMap(reg, resultMap)
 				},
 			},
+			&functions.Overload{
+				Operator: "newReverse",
+				Function: func(values ...ref.Val) ref.Val {
+					return reg.NativeToValue(xrayNewReverse())
+				},
+			},
 		),
 	}
 
 	newOptions = append(newOptions, StandradProgramOption...)
 
 	return newOptions
+}
+
+// xray dns反连平台 目前只支持dnslog.cn和ceye.io
+func xrayNewReverse() (reverse *structs.Reverse) {
+	var (
+		urlStr string
+	)
+	reverse = ReversePool.Get().(*structs.Reverse)
+
+	switch common_structs.ReversePlatformType {
+	case structs.ReverseType_Ceye:
+		sub := utils.RandomStr(utils.AsciiLowercaseAndDigits, 8)
+		urlStr = fmt.Sprintf("http://%s.%s/", sub, common_structs.CeyeDomain)
+	case structs.ReverseType_DnslogCN:
+		dnslogCnRequest := common_structs.DnslogCNGetDomainRequest
+		resp, _, err := requests.DoRequest(dnslogCnRequest, false)
+		if err != nil {
+			wrappedErr := errors.Wrap(err, "Get reverse domain error: Can't get domain from dnslog.cn")
+			utils.ErrorP(wrappedErr)
+			return
+		}
+		content, _ := requests.GetRespBody(resp)
+		urlStr = "http://" + string(content) + "/"
+	default:
+		return
+	}
+
+	u, _ := url.Parse(urlStr)
+	utils.DebugF("Get reverse domain: %s", u.Hostname())
+
+	reverse.Url = requests.ParseUrl(u)
+	reverse.Domain = u.Hostname()
+	reverse.Ip = u.Host
+	reverse.IsDomainNameServer = false
+	reverse.ReverseType = common_structs.ReversePlatformType
+
+	return
 }
 
 func reverseCheck(r *structs.Reverse, timeout int64) bool {

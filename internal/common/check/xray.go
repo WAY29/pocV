@@ -119,11 +119,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	evaluateUpdateVariableMap := func(env *cel.Env, set yaml.MapSlice) {
 		for _, item := range set {
 			k, expression := item.Key.(string), item.Value.(string)
-			if expression == "newReverse()" {
-				reverse := xrayNewReverse()
-				variableMap[k] = reverse
-				continue
-			}
+			// ? 需要重新生成一遍环境，否则之前增加的变量定义不生效
 			env, err = cel.NewEnv(&c)
 			if err != nil {
 				wrappedErr := errors.Newf(errors.EnvInitializationError, "Environment re-creation error: %v", err)
@@ -142,18 +138,20 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 			switch value := out.Value().(type) {
 			case *xray_structs.UrlType:
 				variableMap[k] = cel.UrlTypeToString(value)
-				c.UpdateCompileOption(k, decls.NewObjectType("structs.UrlType"))
+				c.UpdateCompileOption(k, cel.UrlTypeType)
+			case *xray_structs.Reverse:
+				variableMap[k] = value
+				c.UpdateCompileOption(k, cel.ReverseType)
 			case int64:
 				variableMap[k] = int(value)
 				c.UpdateCompileOption(k, decls.Int)
 			case map[string]string:
-				variableMap[k] = out.Value()
+				variableMap[k] = value
 				c.UpdateCompileOption(k, cel.StrStrMapType)
 			default:
-				variableMap[k] = out.Value()
+				variableMap[k] = value
 				c.UpdateCompileOption(k, decls.String)
 			}
-
 		}
 	}
 

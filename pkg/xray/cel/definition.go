@@ -10,6 +10,10 @@ import (
 
 var (
 	StrStrMapType = decls.NewMapType(decls.String, decls.String)
+	RequestType   = decls.NewObjectType("structs.Request")
+	ResponseType  = decls.NewObjectType("structs.Response")
+	ReverseType   = decls.NewObjectType("structs.Reverse")
+	UrlTypeType   = decls.NewObjectType("structs.UrlType")
 
 	StandradEnvOptions = []cel.EnvOption{
 		cel.Container("structs"),
@@ -21,8 +25,8 @@ var (
 			StrStrMapType,
 		),
 		cel.Declarations(
-			decls.NewVar("request", decls.NewObjectType("structs.Request")),
-			decls.NewVar("response", decls.NewObjectType("structs.Response")),
+			decls.NewVar("request", RequestType),
+			decls.NewVar("response", ResponseType),
 		),
 		cel.Declarations(
 			// functions
@@ -60,6 +64,10 @@ var (
 				decls.NewInstanceOverload("reverse_wait_int",
 					[]*exprpb.Type{decls.Any, decls.Int},
 					decls.Bool)),
+			decls.NewFunction("newReverse",
+				decls.NewOverload("newReverse",
+					[]*exprpb.Type{},
+					ReverseType)),
 			decls.NewFunction("md5",
 				decls.NewOverload("md5_string",
 					[]*exprpb.Type{decls.String},

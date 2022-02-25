@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	__version__ = "3.5.0"
+	__version__ = "3.5.1"
 )
 
 var (

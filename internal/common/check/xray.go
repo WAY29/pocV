@@ -116,7 +116,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 		return v
 	}
 	// 定义evaluateUpdateVariableMap
-	evaluateUpdateVariableMap := func(env *cel.Env, set yaml.MapSlice) {
+	evaluateUpdateVariableMap := func(set yaml.MapSlice) {
 		for _, item := range set {
 			k, expression := item.Key.(string), item.Value.(string)
 			// ? 需要重新生成一遍环境，否则之前增加的变量定义不生效
@@ -156,12 +156,12 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	}
 
 	// 处理set
-	evaluateUpdateVariableMap(env, poc.Set)
+	evaluateUpdateVariableMap(poc.Set)
 
 	// 处理payload
 	for _, setMapVal := range poc.Payloads.Payloads {
 		setMap := setMapVal.Value.(yaml.MapSlice)
-		evaluateUpdateVariableMap(env, setMap)
+		evaluateUpdateVariableMap(setMap)
 	}
 	// 渲染detail
 	detail := &poc.Detail
@@ -380,7 +380,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 		}
 
 		// 处理output
-		evaluateUpdateVariableMap(env, rule.Output)
+		evaluateUpdateVariableMap(rule.Output)
 		// 注入名为ruleName的函数
 		c.NewResultFunction(ruleName, flag)
 

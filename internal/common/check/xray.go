@@ -115,16 +115,22 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 		}
 		return v
 	}
+	ReCreateEnv := func() error {
+		env, err = cel.NewEnv(&c)
+		if err != nil {
+			wrappedErr := errors.Newf(errors.EnvInitializationError, "Environment re-creation error: %v", err)
+			return wrappedErr
+		}
+		return nil
+	}
+
 	// 定义evaluateUpdateVariableMap
 	evaluateUpdateVariableMap := func(set yaml.MapSlice) {
 		for _, item := range set {
 			k, expression := item.Key.(string), item.Value.(string)
 			// ? 需要重新生成一遍环境，否则之前增加的变量定义不生效
-			env, err = cel.NewEnv(&c)
-			if err != nil {
-				wrappedErr := errors.Newf(errors.EnvInitializationError, "Environment re-creation error: %v", err)
-				utils.ErrorP(wrappedErr)
-				return
+			if err := ReCreateEnv(); err != nil {
+				utils.ErrorP(err)
 			}
 
 			out, err := cel.Evaluate(env, expression, variableMap)
@@ -152,6 +158,10 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 				variableMap[k] = value
 				c.UpdateCompileOption(k, decls.String)
 			}
+		}
+		// ? 最后再生成一遍环境，否则之前增加的变量定义不生效
+		if err := ReCreateEnv(); err != nil {
+			utils.ErrorP(err)
 		}
 	}
 
@@ -360,12 +370,6 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 		utils.DebugF("raw response: \n%#s", string(protoResponse.Raw))
 
 		// 执行表达式
-		// ? 需要重新生成一遍环境，否则之前增加的变量定义不生效
-		env, err = cel.NewEnv(&c)
-		if err != nil {
-			wrappedErr := errors.Wrap(err, "Environment re-creation error")
-			return false, wrappedErr
-		}
 		out, err := cel.Evaluate(env, rule.Expression, variableMap)
 
 		if err != nil {
@@ -381,8 +385,8 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 
 		// 处理output
 		evaluateUpdateVariableMap(rule.Output)
-		// 注入名为ruleName的函数
-		c.NewResultFunction(ruleName, flag)
+		// 设置Result函数结果
+		c.SetResultFunctionBool(ruleName, flag)
 
 		return flag, nil
 	}
@@ -398,24 +402,37 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 		requestFunc = HttpRequestInvoke
 	}
 
-	// 执行rule
 	ruleSlice := poc.Rules
+	// 提前定义名为ruleName的函数
+	for _, ruleItem := range ruleSlice {
+		c.DefineFunction(ruleItem.Key)
+	}
+
+	// 执行rule
 	for _, ruleItem := range ruleSlice {
 		_, err = RequestInvoke(requestFunc, ruleItem.Key, ruleItem.Value)
 		if err != nil {
 			return false, err
 		}
+
+		// 判断poc总体表达式结果
+		successVal, err := cel.Evaluate(env, poc.Expression, variableMap)
+		if err != nil {
+			wrappedErr := errors.Wrapf(err, "Evalute poc[%s] expression error: %s", poc.Name, poc.Expression)
+			return false, wrappedErr
+		}
+
+		isVul, ok := successVal.Value().(bool)
+		if !ok {
+			isVul = false
+		}
+		// 如果为true，直接返回，不再进行多余请求
+		if isVul {
+			return isVul, nil
+		}
 	}
 
-	// 判断poc总体表达式结果
-	// ? 需要重新生成一遍环境，否则之前增加的结果函数不生效
-	env, err = cel.NewEnv(&c)
-	if err != nil {
-		wrappedErr := errors.Wrap(err, "Environment re-creation error")
-		utils.ErrorP(wrappedErr)
-		return false, err
-	}
-
+	// 最后再判断一次poc总体表达式结果
 	successVal, err := cel.Evaluate(env, poc.Expression, variableMap)
 	if err != nil {
 		wrappedErr := errors.Wrapf(err, "Evalute poc[%s] expression error: %s", poc.Name, poc.Expression)

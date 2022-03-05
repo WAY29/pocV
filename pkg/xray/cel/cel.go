@@ -22,6 +22,7 @@ var (
 			return CustomLib{}
 		},
 	}
+	ResultMap = make(map[string]bool)
 )
 
 // 自定义Lib库，包含变量和函数
@@ -121,7 +122,7 @@ func (c *CustomLib) UpdateCompileOption(k string, t *exprpb.Type) {
 	c.envOptions = append(c.envOptions, cel.Declarations(decls.NewVar(k, t)))
 }
 
-func (c *CustomLib) NewResultFunction(funcName string, returnBool bool) {
+func (c *CustomLib) DefineFunction(funcName string) {
 	c.envOptions = append(c.envOptions, cel.Declarations(
 		decls.NewFunction(funcName,
 			decls.NewOverload(funcName,
@@ -134,8 +135,17 @@ func (c *CustomLib) NewResultFunction(funcName string, returnBool bool) {
 		&functions.Overload{
 			Operator: funcName,
 			Function: func(values ...ref.Val) ref.Val {
-				return types.Bool(returnBool)
+				var r, ok bool
+
+				if r, ok = ResultMap[funcName]; !ok {
+					r = false
+				}
+
+				return types.Bool(r)
 			},
 		}))
+}
 
+func (c *CustomLib) SetResultFunctionBool(funcName string, returnBool bool) {
+	ResultMap[funcName] = returnBool
 }

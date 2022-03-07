@@ -16,13 +16,14 @@ import (
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
+type RequestFuncType func(rule structs.Rule) error
+
 var (
 	CustomLibPool = sync.Pool{
 		New: func() interface{} {
 			return CustomLib{}
 		},
 	}
-	ResultMap = make(map[string]bool)
 )
 
 // 自定义Lib库，包含变量和函数
@@ -122,30 +123,24 @@ func (c *CustomLib) UpdateCompileOption(k string, t *exprpb.Type) {
 	c.envOptions = append(c.envOptions, cel.Declarations(decls.NewVar(k, t)))
 }
 
-func (c *CustomLib) DefineFunction(funcName string) {
+func (c *CustomLib) DefineRuleFunction(requestFunc RequestFuncType, ruleName string, rule structs.Rule, function func(requestFunc RequestFuncType, ruleName string, rule structs.Rule) (bool, error)) {
 	c.envOptions = append(c.envOptions, cel.Declarations(
-		decls.NewFunction(funcName,
-			decls.NewOverload(funcName,
+		decls.NewFunction(ruleName,
+			decls.NewOverload(ruleName,
 				[]*exprpb.Type{},
 				decls.Bool)),
-	),
-	)
+	))
 
 	c.programOptions = append(c.programOptions, cel.Functions(
 		&functions.Overload{
-			Operator: funcName,
+			Operator: ruleName,
 			Function: func(values ...ref.Val) ref.Val {
-				var r, ok bool
-
-				if r, ok = ResultMap[funcName]; !ok {
+				r, err := function(requestFunc, ruleName, rule)
+				if err != nil {
 					r = false
+					utils.ErrorP(err)
 				}
-
 				return types.Bool(r)
 			},
 		}))
-}
-
-func (c *CustomLib) SetResultFunctionBool(funcName string, returnBool bool) {
-	ResultMap[funcName] = returnBool
 }

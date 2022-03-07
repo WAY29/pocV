@@ -62,7 +62,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 
 		oReqUrlString string
 
-		requestFunc RequestFuncType
+		requestFunc cel.RequestFuncType
 	)
 
 	// 初始赋值
@@ -192,7 +192,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	vulnerability.Match = render(vulnerability.Match)
 
 	// transport=http: request处理
-	HttpRequestInvoke := func(ruleName string, rule xray_structs.Rule) error {
+	HttpRequestInvoke := func(rule xray_structs.Rule) error {
 		var (
 			ok      bool
 			err     error
@@ -264,7 +264,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	}
 
 	// transport=tcp/udp: request处理
-	TCPUDPRequestInvoke := func(ruleName string, rule xray_structs.Rule) error {
+	TCPUDPRequestInvoke := func(rule xray_structs.Rule) error {
 		var (
 			tcpudpTypeUpper = strings.ToUpper(tcpudpType)
 			buffer          = BodyBufPool.Get().([]byte)
@@ -352,13 +352,13 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	}
 
 	// reqeusts总处理
-	RequestInvoke := func(requestFunc RequestFuncType, ruleName string, rule xray_structs.Rule) (bool, error) {
+	RequestInvoke := func(requestFunc cel.RequestFuncType, ruleName string, rule xray_structs.Rule) (bool, error) {
 		var (
 			flag bool
 			ok   bool
 			err  error
 		)
-		err = requestFunc(ruleName, rule)
+		err = requestFunc(rule)
 		if err != nil {
 			return false, err
 		}
@@ -385,8 +385,6 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 
 		// 处理output
 		evaluateUpdateVariableMap(rule.Output)
-		// 设置Result函数结果
-		c.SetResultFunctionBool(ruleName, flag)
 
 		return flag, nil
 	}
@@ -405,34 +403,15 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	ruleSlice := poc.Rules
 	// 提前定义名为ruleName的函数
 	for _, ruleItem := range ruleSlice {
-		c.DefineFunction(ruleItem.Key)
+		c.DefineRuleFunction(requestFunc, ruleItem.Key, ruleItem.Value, RequestInvoke)
 	}
 
-	// 执行rule
-	for _, ruleItem := range ruleSlice {
-		_, err = RequestInvoke(requestFunc, ruleItem.Key, ruleItem.Value)
-		if err != nil {
-			return false, err
-		}
-
-		// 判断poc总体表达式结果
-		successVal, err := cel.Evaluate(env, poc.Expression, variableMap)
-		if err != nil {
-			wrappedErr := errors.Wrapf(err, "Evalute poc[%s] expression error: %s", poc.Name, poc.Expression)
-			return false, wrappedErr
-		}
-
-		isVul, ok := successVal.Value().(bool)
-		if !ok {
-			isVul = false
-		}
-		// 如果为true，直接返回，不再进行多余请求
-		if isVul {
-			return isVul, nil
-		}
+	// ? 最后再生成一遍环境，否则之前增加的变量定义不生效
+	if err := ReCreateEnv(); err != nil {
+		utils.ErrorP(err)
 	}
 
-	// 最后再判断一次poc总体表达式结果
+	// 执行rule 并判断poc总体表达式结果
 	successVal, err := cel.Evaluate(env, poc.Expression, variableMap)
 	if err != nil {
 		wrappedErr := errors.Wrapf(err, "Evalute poc[%s] expression error: %s", poc.Name, poc.Expression)

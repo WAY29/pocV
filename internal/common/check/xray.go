@@ -217,7 +217,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 
 			// 处理Path
 			if strings.HasPrefix(ruleReq.Path, "/") {
-				protoRequest.Url.Path = strings.Trim(oReq.URL.Path, "/") + "/" + ruleReq.Path[1:]
+				protoRequest.Url.Path = "/" + strings.Trim(oReq.URL.Path, "/") + "/" + ruleReq.Path[1:]
 			} else if strings.HasPrefix(ruleReq.Path, "^") {
 				protoRequest.Url.Path = "/" + ruleReq.Path[1:]
 			}
@@ -227,7 +227,10 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 			protoRequest.Url.Path = strings.ReplaceAll(protoRequest.Url.Path, "+", "%20")
 
 			// 克隆请求对象
-			request, _ = http.NewRequest(ruleReq.Method, fmt.Sprintf("%s://%s%s", protoRequest.Url.Scheme, protoRequest.Url.Host, protoRequest.Url.Path), strings.NewReader(ruleReq.Body))
+			request, err = http.NewRequest(ruleReq.Method, fmt.Sprintf("%s://%s%s", protoRequest.Url.Scheme, protoRequest.Url.Host, protoRequest.Url.Path), strings.NewReader(ruleReq.Body))
+			if err != nil {
+				return err
+			}
 
 			// 处理请求头
 			request.Header = oReq.Header.Clone()
@@ -256,6 +259,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 
 			// 设置缓存
 			requests.XraySetHttpRequestCache(&ruleReq, request, protoRequest, protoResponse)
+
 		} else {
 			utils.DebugF("Hit http request cache[%s%s]", oReqUrlString, ruleReq.Path)
 		}

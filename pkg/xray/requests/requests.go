@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/tls"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -166,9 +165,7 @@ func DoRequest(req *http.Request, redirect bool) (*http.Response, int64, error) 
 
 func ParseHttpRequest(oReq *http.Request) (*structs.Request, error) {
 	var (
-		header    string
-		rawHeader string = ""
-		req              = RequestPool.Get().(*structs.Request)
+		req = RequestPool.Get().(*structs.Request)
 	)
 
 	req.Method = oReq.Method
@@ -176,12 +173,9 @@ func ParseHttpRequest(oReq *http.Request) (*structs.Request, error) {
 
 	headers := make(map[string]string)
 	for k := range oReq.Header {
-		header = oReq.Header.Get(k)
-		headers[k] = header
-		rawHeader += fmt.Sprintf("%s=%s\n", k, headers)
+		headers[k] = oReq.Header.Get(k)
 	}
 	req.Headers = headers
-	req.RawHeader = []byte(strings.Trim(rawHeader, "\n"))
 
 	req.ContentType = oReq.Header.Get("Content-Type")
 	if oReq.Body != nil && oReq.Body != http.NoBody {
@@ -199,25 +193,29 @@ func ParseHttpRequest(oReq *http.Request) (*structs.Request, error) {
 
 func ParseHttpResponse(oResp *http.Response, milliseconds int64) (*structs.Response, error) {
 	var (
-		resp   *structs.Response = ResponsePool.Get().(*structs.Response)
-		err    error
-		header string
+		resp             *structs.Response = ResponsePool.Get().(*structs.Response)
+		err              error
+		header           string
+		rawHeaderBuilder strings.Builder
 	)
 
 	headers := make(map[string]string)
 	resp.Status = int32(oResp.StatusCode)
 	resp.Url = ParseUrl(oResp.Request.URL)
-	rawHeader := ""
 
 	for k := range oResp.Header {
 		header = oResp.Header.Get(k)
 		headers[k] = header
-		rawHeader += fmt.Sprintf("%s: %s\n", k, header)
+
+		rawHeaderBuilder.WriteString(k)
+		rawHeaderBuilder.WriteString(": ")
+		rawHeaderBuilder.WriteString(header)
+		rawHeaderBuilder.WriteString("\n")
 	}
 	resp.Headers = headers
 	resp.ContentType = oResp.Header.Get("Content-Type")
 	// 原始请求头
-	resp.RawHeader = []byte(strings.Trim(rawHeader, "\n"))
+	resp.RawHeader = []byte(strings.Trim(rawHeaderBuilder.String(), "\n"))
 
 	// 原始http响应
 	resp.Raw, err = httputil.DumpResponse(oResp, true)

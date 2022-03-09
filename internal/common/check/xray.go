@@ -194,9 +194,10 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	// transport=http: request处理
 	HttpRequestInvoke := func(rule xray_structs.Rule) error {
 		var (
-			ok      bool
-			err     error
-			ruleReq xray_structs.RuleRequest = rule.Request
+			ok               bool
+			err              error
+			ruleReq          xray_structs.RuleRequest = rule.Request
+			rawHeaderBuilder strings.Builder
 		)
 
 		// 渲染请求头，请求路径和请求体
@@ -238,13 +239,15 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 
 			// 处理请求头
 			request.Header = oReq.Header.Clone()
-			rawHeader := ""
 			for k, v := range ruleReq.Headers {
 				request.Header.Set(k, v)
-				rawHeader += fmt.Sprintf("%s: %s\n", k, v)
+				rawHeaderBuilder.WriteString(k)
+				rawHeaderBuilder.WriteString(": ")
+				rawHeaderBuilder.WriteString(v)
+				rawHeaderBuilder.WriteString("\n")
 			}
 
-			protoRequest.RawHeader = []byte(strings.Trim(rawHeader, "\n"))
+			protoRequest.RawHeader = []byte(strings.Trim(rawHeaderBuilder.String(), "\n"))
 
 			// 额外处理protoRequest.Raw
 			protoRequest.Raw, _ = httputil.DumpRequestOut(request, true)

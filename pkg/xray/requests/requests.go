@@ -199,18 +199,26 @@ func ParseHttpRequest(oReq *http.Request) (*structs.Request, error) {
 
 func ParseHttpResponse(oResp *http.Response, milliseconds int64) (*structs.Response, error) {
 	var (
-		resp *structs.Response = ResponsePool.Get().(*structs.Response)
-		err  error
+		resp   *structs.Response = ResponsePool.Get().(*structs.Response)
+		err    error
+		header string
 	)
 
-	header := make(map[string]string)
+	headers := make(map[string]string)
 	resp.Status = int32(oResp.StatusCode)
 	resp.Url = ParseUrl(oResp.Request.URL)
+	rawHeader := ""
+
 	for k := range oResp.Header {
-		header[k] = oResp.Header.Get(k)
+		header = oResp.Header.Get(k)
+		headers[k] = header
+		rawHeader += fmt.Sprintf("%s: %s\n", k, header)
 	}
-	resp.Headers = header
+	resp.Headers = headers
 	resp.ContentType = oResp.Header.Get("Content-Type")
+	// 原始请求头
+	resp.RawHeader = []byte(strings.Trim(rawHeader, "\n"))
+
 	// 原始http响应
 	resp.Raw, err = httputil.DumpResponse(oResp, true)
 	body, err := GetRespBody(oResp)
@@ -224,6 +232,7 @@ func ParseHttpResponse(oResp *http.Response, milliseconds int64) (*structs.Respo
 	// http响应体
 	resp.Body = body
 
+	// 响应时间
 	resp.Latency = milliseconds
 
 	return resp, nil

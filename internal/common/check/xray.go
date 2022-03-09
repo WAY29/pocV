@@ -217,9 +217,13 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 
 			// 处理Path
 			if strings.HasPrefix(ruleReq.Path, "/") {
-				protoRequest.Url.Path = "/" + strings.Trim(oReq.URL.Path, "/") + "/" + ruleReq.Path[1:]
+				protoRequest.Url.Path = strings.Trim(oReq.URL.Path, "/") + "/" + ruleReq.Path[1:]
 			} else if strings.HasPrefix(ruleReq.Path, "^") {
 				protoRequest.Url.Path = "/" + ruleReq.Path[1:]
+			}
+
+			if !strings.HasPrefix(protoRequest.Url.Path, "/") {
+				protoRequest.Url.Path = "/" + protoRequest.Url.Path
 			}
 
 			// 某些poc没有区分path和query，需要处理
@@ -237,8 +241,9 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 			rawHeader := ""
 			for k, v := range ruleReq.Headers {
 				request.Header.Set(k, v)
-				rawHeader += fmt.Sprintf("%s=%s\n", k, v)
+				rawHeader += fmt.Sprintf("%s: %s\n", k, v)
 			}
+
 			protoRequest.RawHeader = []byte(strings.Trim(rawHeader, "\n"))
 
 			// 额外处理protoRequest.Raw

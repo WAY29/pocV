@@ -44,13 +44,6 @@ type RequestFuncType func(ruleName string, rule xray_structs.Rule) error
 func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (isVul bool, err error) {
 	isVul = false
 
-	defer func() {
-		if r := recover(); r != nil {
-			err = errors.Wrapf(r.(error), "Run Xray Poc[%s] error", poc.Name)
-			isVul = false
-		}
-	}()
-
 	var (
 		milliseconds int64
 		tcpudpType   string = ""
@@ -59,11 +52,41 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 		response      *http.Response
 		protoRequest  *xray_structs.Request
 		protoResponse *xray_structs.Response
+		variableMap   map[string]interface{} = VariableMapPool.Get().(map[string]interface{})
 
 		oReqUrlString string
 
 		requestFunc cel.RequestFuncType
 	)
+
+	// 异常处理
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.Wrapf(r.(error), "Run Xray Poc[%s] error", poc.Name)
+			isVul = false
+		}
+	}()
+	// 回收
+	defer func() {
+		VariableMapPool.Put(variableMap)
+		requests.PutRequest(protoRequest)
+		requests.PutResponse(protoResponse)
+		requests.PutUrlType(protoRequest.Url)
+		requests.PutUrlType(protoResponse.Url)
+		if protoResponse.Conn != nil {
+			requests.PutAddrType(protoResponse.Conn.Source)
+			requests.PutAddrType(protoResponse.Conn.Destination)
+			requests.PutConnectInfo(protoResponse.Conn)
+		}
+
+		for _, v := range variableMap {
+			switch v.(type) {
+			case *xray_structs.Reverse:
+				cel.PutReverse(v)
+			default:
+			}
+		}
+	}()
 
 	// 初始赋值
 	if oReq != nil {
@@ -87,8 +110,10 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 		}
 	}
 
-	// 初始化cel-go环境
+	// 初始化cel-go环境，并在函数返回时回收
 	c := cel.NewEnvOption()
+	defer cel.PutCustomLib(c)
+
 	env, err := cel.NewEnv(&c)
 	if err != nil {
 		wrappedErr := errors.Wrap(err, "Environment creation error")
@@ -97,7 +122,6 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	}
 
 	// 请求中的全局变量
-	variableMap := VariableMapPool.Get().(map[string]interface{})
 
 	// 定义渲染函数
 	render := func(v string) string {
@@ -291,10 +315,13 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 			ok  bool
 			err error
 		)
+		defer BodyBufPool.Put(buffer)
 
 		// 获取response缓存
 		if responseRaw, protoResponse, ok = requests.XrayGetTcpUdpResponseCache(rule.Request.Content); !ok || !rule.Request.Cache {
 			responseRaw = BodyPool.Get().([]byte)
+			defer BodyPool.Put(responseRaw)
+
 			// 获取connectionID缓存
 			if connCache, ok = requests.XrayGetTcpUdpConnectionCache(connectionID); !ok {
 				// 处理timeout

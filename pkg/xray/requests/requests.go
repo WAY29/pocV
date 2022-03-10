@@ -27,43 +27,43 @@ var (
 	DialTimout       = 5 * time.Second
 	KeepAlive        = 15 * time.Second
 
-	UrlTypePool = sync.Pool{
+	urlTypePool = sync.Pool{
 		New: func() interface{} {
 			return new(structs.UrlType)
 		},
 	}
-	ConnectInfoTypePool = sync.Pool{
+	connectInfoTypePool = sync.Pool{
 		New: func() interface{} {
 			return new(structs.ConnInfoType)
 		},
 	}
-	AddrTypePool = sync.Pool{
+	addrTypePool = sync.Pool{
 		New: func() interface{} {
 			return new(structs.AddrType)
 		},
 	}
-	TracePool = sync.Pool{
+	tracePool = sync.Pool{
 		New: func() interface{} {
 			return new(httptrace.ClientTrace)
 		},
 	}
 
-	RequestPool = sync.Pool{
+	requestPool = sync.Pool{
 		New: func() interface{} {
 			return new(structs.Request)
 		},
 	}
-	ResponsePool = sync.Pool{
+	responsePool = sync.Pool{
 		New: func() interface{} {
 			return new(structs.Response)
 		},
 	}
-	HttpBodyBufPool = sync.Pool{
+	httpBodyBufPool = sync.Pool{
 		New: func() interface{} {
 			return make([]byte, 1024)
 		},
 	}
-	HttpBodyPool = sync.Pool{
+	httpBodyPool = sync.Pool{
 		New: func() interface{} {
 			return make([]byte, 4096)
 		},
@@ -115,7 +115,7 @@ func InitHttpClient(ThreadsNum int, DownProxy string, Timeout time.Duration) err
 }
 
 func ParseUrl(u *url.URL) *structs.UrlType {
-	urlType := UrlTypePool.Get().(*structs.UrlType)
+	urlType := urlTypePool.Get().(*structs.UrlType)
 
 	urlType.Scheme = u.Scheme
 	urlType.Domain = u.Hostname()
@@ -142,7 +142,7 @@ func DoRequest(req *http.Request, redirect bool) (*http.Response, int64, error) 
 		}
 	}
 	start := time.Now()
-	trace := TracePool.Get().(*httptrace.ClientTrace)
+	trace := tracePool.Get().(*httptrace.ClientTrace)
 	trace.GotFirstResponseByte = func() {
 		milliseconds = time.Since(start).Nanoseconds() / 1e6
 	}
@@ -165,7 +165,7 @@ func DoRequest(req *http.Request, redirect bool) (*http.Response, int64, error) 
 
 func ParseHttpRequest(oReq *http.Request) (*structs.Request, error) {
 	var (
-		req = RequestPool.Get().(*structs.Request)
+		req = requestPool.Get().(*structs.Request)
 	)
 
 	req.Method = oReq.Method
@@ -193,7 +193,7 @@ func ParseHttpRequest(oReq *http.Request) (*structs.Request, error) {
 
 func ParseHttpResponse(oResp *http.Response, milliseconds int64) (*structs.Response, error) {
 	var (
-		resp             *structs.Response = ResponsePool.Get().(*structs.Response)
+		resp             *structs.Response = responsePool.Get().(*structs.Response)
 		err              error
 		header           string
 		rawHeaderBuilder strings.Builder
@@ -238,7 +238,7 @@ func ParseHttpResponse(oResp *http.Response, milliseconds int64) (*structs.Respo
 
 func ParseTCPUDPRequest(content []byte) (*structs.Request, error) {
 	var (
-		req = RequestPool.Get().(*structs.Request)
+		req = requestPool.Get().(*structs.Request)
 	)
 
 	req.Raw = content
@@ -248,8 +248,8 @@ func ParseTCPUDPRequest(content []byte) (*structs.Request, error) {
 
 func ParseTCPUDPResponse(content []byte, socket *net.Conn, transport string) (*structs.Response, error) {
 	var (
-		resp       *structs.Response     = ResponsePool.Get().(*structs.Response)
-		conn       *structs.ConnInfoType = ConnectInfoTypePool.Get().(*structs.ConnInfoType)
+		resp       *structs.Response     = responsePool.Get().(*structs.Response)
+		conn       *structs.ConnInfoType = connectInfoTypePool.Get().(*structs.ConnInfoType)
 		connection                       = *socket
 
 		addr     string
@@ -269,7 +269,7 @@ func ParseTCPUDPResponse(content []byte, socket *net.Conn, transport string) (*s
 		port = ""
 	}
 
-	addrType = AddrTypePool.Get().(*structs.AddrType)
+	addrType = addrTypePool.Get().(*structs.AddrType)
 	addrType.Transport = transport
 	addrType.Addr = addr
 	addrType.Port = port
@@ -284,7 +284,7 @@ func ParseTCPUDPResponse(content []byte, socket *net.Conn, transport string) (*s
 		port = ""
 	}
 
-	addrType = AddrTypePool.Get().(*structs.AddrType)
+	addrType = addrTypePool.Get().(*structs.AddrType)
 	addrType.Transport = transport
 	addrType.Addr = addr
 	addrType.Port = port
@@ -297,13 +297,14 @@ func ParseTCPUDPResponse(content []byte, socket *net.Conn, transport string) (*s
 }
 
 func GetRespBody(oResp *http.Response) ([]byte, error) {
-	body := HttpBodyPool.Get().([]byte)
+	body := httpBodyPool.Get().([]byte)
+	defer httpBodyPool.Put(body)
 
 	if oResp.Header.Get("Content-Encoding") == "gzip" {
 		gr, _ := gzip.NewReader(oResp.Body)
 		defer gr.Close()
 		for {
-			buf := HttpBodyBufPool.Get().([]byte)
+			buf := httpBodyBufPool.Get().([]byte)
 			n, err := gr.Read(buf)
 			if err != nil && err != io.EOF {
 				return nil, err
@@ -312,6 +313,7 @@ func GetRespBody(oResp *http.Response) ([]byte, error) {
 				break
 			}
 			body = append(body, buf...)
+			httpBodyBufPool.Put(buf)
 		}
 	} else {
 		raw, err := ioutil.ReadAll(oResp.Body)
@@ -322,4 +324,23 @@ func GetRespBody(oResp *http.Response) ([]byte, error) {
 		body = raw
 	}
 	return body, nil
+}
+
+func PutUrlType(urlType *structs.UrlType) {
+	urlTypePool.Put(urlType)
+}
+
+func PutConnectInfo(connInfo *structs.ConnInfoType) {
+	connectInfoTypePool.Put(connInfo)
+}
+
+func PutAddrType(addrType *structs.AddrType) {
+	addrTypePool.Put(addrType)
+}
+
+func PutRequest(request *structs.Request) {
+	requestPool.Put(request)
+}
+func PutResponse(response *structs.Response) {
+	responsePool.Put(response)
 }

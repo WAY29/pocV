@@ -27,7 +27,7 @@ var (
 
 	OutputChannel chan common_structs.Result
 
-	PocResultPool = sync.Pool{
+	ResultPool = sync.Pool{
 		New: func() interface{} {
 			return new(common_structs.PocResult)
 		},
@@ -115,7 +115,7 @@ func check(taskInterface interface{}) {
 			return
 		}
 
-		pocResult := PocResultPool.Get().(*common_structs.PocResult)
+		pocResult := ResultPool.Get().(*common_structs.PocResult)
 		pocResult.Str = fmt.Sprintf("%s (%s)", target, pocName)
 		pocResult.Success = isVul
 		pocResult.URL = target
@@ -160,7 +160,7 @@ func check(taskInterface interface{}) {
 				desc = r.TemplateID + ":" + r.MatcherName
 			}
 
-			pocResult := PocResultPool.Get().(*common_structs.PocResult)
+			pocResult := ResultPool.Get().(*common_structs.PocResult)
 			pocResult.Str = fmt.Sprintf("%s (%s) ", r.Matched, r.TemplateID)
 			pocResult.Success = isVul
 			pocResult.URL = r.Matched
@@ -173,4 +173,8 @@ func check(taskInterface interface{}) {
 		}
 	}
 
+}
+
+func PutPocResult(result *common_structs.Result) {
+	ResultPool.Put(result)
 }

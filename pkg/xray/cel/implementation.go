@@ -553,3 +553,7 @@ func reverseCheck(r *structs.Reverse, timeout int64) bool {
 	}
 
 }
+
+func PutReverse(reverse interface{}) {
+	ReversePool.Put(reverse)
+}

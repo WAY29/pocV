@@ -110,6 +110,10 @@ func NewEnvOption() CustomLib {
 	return c
 }
 
+func PutCustomLib(c CustomLib) {
+	CustomLibPool.Put(c)
+}
+
 // 声明环境中的变量类型和函数
 func (c *CustomLib) CompileOptions() []cel.EnvOption {
 	return c.envOptions

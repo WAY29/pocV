@@ -45,7 +45,7 @@ func cmdUpdate(cmd *cli.Cmd) {
 		if !*assumeYes {
 			utils.QuestionF("Do you want to update pocV[%s -> %s] ? (Y/n): ", __version__, latest.Version)
 			input, err := bufio.NewReader(os.Stdin).ReadString('\n')
-			input = strings.TrimSpace(input)
+			input = strings.ToLower(strings.TrimSpace(input))
 			if err != nil || (input != "y" && input != "n" && input != "") {
 				utils.Error("Invalid input")
 				return

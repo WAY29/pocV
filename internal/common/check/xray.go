@@ -50,6 +50,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 
 		request       *http.Request
 		response      *http.Response
+		oProtoRequest *xray_structs.Request
 		protoRequest  *xray_structs.Request
 		protoResponse *xray_structs.Response
 		variableMap   map[string]interface{} = VariableMapPool.Get().(map[string]interface{})
@@ -68,17 +69,17 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	}()
 	// 回收
 	defer func() {
-		VariableMapPool.Put(variableMap)
-		requests.PutRequest(protoRequest)
-		requests.PutResponse(protoResponse)
 		requests.PutUrlType(protoRequest.Url)
+		requests.PutUrlType(oProtoRequest.Url)
 		requests.PutUrlType(protoResponse.Url)
 		if protoResponse.Conn != nil {
 			requests.PutAddrType(protoResponse.Conn.Source)
 			requests.PutAddrType(protoResponse.Conn.Destination)
 			requests.PutConnectInfo(protoResponse.Conn)
 		}
-
+		requests.PutRequest(protoRequest)
+		requests.PutRequest(oProtoRequest)
+		requests.PutResponse(protoResponse)
 		for _, v := range variableMap {
 			switch v.(type) {
 			case *xray_structs.Reverse:
@@ -86,14 +87,18 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 			default:
 			}
 		}
+		VariableMapPool.Put(variableMap)
 	}()
 
 	// 初始赋值
 	if oReq != nil {
 		oReqUrlString = oReq.URL.String()
 	}
-
 	utils.DebugF("Run Xray Poc[%s] for %s", poc.Name, target)
+
+	// 设置原始请求变量
+	oProtoRequest, _ = requests.ParseHttpRequest(oReq)
+	variableMap["request"] = oProtoRequest
 
 	// 判断transport，如果不合法则跳过
 	transport := poc.Transport

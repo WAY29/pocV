@@ -81,12 +81,12 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 		}
 		if protoResponse != nil {
 			requests.PutUrlType(protoResponse.Url)
-			requests.PutResponse(protoResponse)
 			if protoResponse.Conn != nil {
 				requests.PutAddrType(protoResponse.Conn.Source)
 				requests.PutAddrType(protoResponse.Conn.Destination)
 				requests.PutConnectInfo(protoResponse.Conn)
 			}
+			requests.PutResponse(protoResponse)
 		}
 
 		for _, v := range variableMap {

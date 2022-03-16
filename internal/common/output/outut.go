@@ -47,7 +47,10 @@ func InitOutput(file string, jsonFlag bool) (chan structs.Result, *sizedwaitgrou
 				output.Write(result)
 			}
 
-			check.PutPocResult(&result)
+			pocResult, ok := result.(*structs.PocResult)
+			if ok {
+				check.PutPocResult(pocResult)
+			}
 		}
 	}()
 

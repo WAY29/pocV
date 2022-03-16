@@ -175,6 +175,6 @@ func check(taskInterface interface{}) {
 
 }
 
-func PutPocResult(result *common_structs.Result) {
+func PutPocResult(result *common_structs.PocResult) {
 	ResultPool.Put(result)
 }

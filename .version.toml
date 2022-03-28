@@ -2,7 +2,7 @@
   extraCommands = ["git push", "git push --tags"]
   serialize = "{version}-{banner}"
   tag = true
-  version = "3.6.6"
+  version = "3.6.7"
 
 [[operate]]
   location = "cmd/pocV/pocV.go"

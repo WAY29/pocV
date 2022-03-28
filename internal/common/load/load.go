@@ -112,7 +112,7 @@ func FilterPocs(tags []string, xrayPocMap map[string]xray_structs.Poc, nucleiPoc
 	for k, poc := range nucleiPocMap {
 		for _, tag := range tags {
 			if !strings.Contains(poc.Info.Tags.String(), strings.ToLower(tag)) {
-				delete(xrayPocMap, k)
+				delete(nucleiPocMap, k)
 				break
 			}
 		}

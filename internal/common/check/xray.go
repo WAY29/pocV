@@ -496,13 +496,12 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	for _, setMapVal := range poc.Payloads.Payloads {
 		setMap := setMapVal.Value.(yaml.MapSlice)
 		evaluateUpdateVariableMap(setMap)
-		fmt.Printf("%#v\n", variableMap)
 		isVul, err = run()
 		if err != nil {
 			return false, err
 		}
 
-		if !poc.Payloads.Continue {
+		if isVul && !poc.Payloads.Continue {
 			return isVul, nil
 		}
 	}

@@ -181,20 +181,30 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 			// 设置variableMap并且更新CompileOption
 			switch value := out.Value().(type) {
 			case *xray_structs.UrlType:
+				if _, ok := variableMap[k]; !ok {
+					c.UpdateCompileOption(k, cel.UrlTypeType)
+				}
 				variableMap[k] = cel.UrlTypeToString(value)
-				c.UpdateCompileOption(k, cel.UrlTypeType)
 			case *xray_structs.Reverse:
+				if _, ok := variableMap[k]; !ok {
+					c.UpdateCompileOption(k, cel.ReverseType)
+				}
 				variableMap[k] = value
-				c.UpdateCompileOption(k, cel.ReverseType)
 			case int64:
+				if _, ok := variableMap[k]; !ok {
+					c.UpdateCompileOption(k, decls.Int)
+				}
 				variableMap[k] = int(value)
-				c.UpdateCompileOption(k, decls.Int)
 			case map[string]string:
+				if _, ok := variableMap[k]; !ok {
+					c.UpdateCompileOption(k, cel.StrStrMapType)
+				}
 				variableMap[k] = value
-				c.UpdateCompileOption(k, cel.StrStrMapType)
 			default:
+				if _, ok := variableMap[k]; !ok {
+					c.UpdateCompileOption(k, decls.String)
+				}
 				variableMap[k] = value
-				c.UpdateCompileOption(k, decls.String)
 			}
 		}
 		// ? 最后再生成一遍环境，否则之前增加的变量定义不生效
@@ -206,11 +216,6 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	// 处理set
 	evaluateUpdateVariableMap(poc.Set)
 
-	// 处理payload
-	for _, setMapVal := range poc.Payloads.Payloads {
-		setMap := setMapVal.Value.(yaml.MapSlice)
-		evaluateUpdateVariableMap(setMap)
-	}
 	// 渲染detail
 	detail := &poc.Detail
 	detail.Author = render(detail.Author)
@@ -465,16 +470,41 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	}
 
 	// 执行rule 并判断poc总体表达式结果
-	successVal, err := cel.Evaluate(env, poc.Expression, variableMap)
-	if err != nil {
-		wrappedErr := errors.Wrapf(err, "Evalute poc[%s] expression error: %s", poc.Name, poc.Expression)
-		return false, wrappedErr
+	run := func() (bool, error) {
+		successVal, err := cel.Evaluate(env, poc.Expression, variableMap)
+		if err != nil {
+			wrappedErr := errors.Wrapf(err, "Evalute poc[%s] expression error: %s", poc.Name, poc.Expression)
+			return false, wrappedErr
+		}
+
+		isVul, ok := successVal.Value().(bool)
+		if !ok {
+			isVul = false
+		}
+
+		return isVul, nil
 	}
 
-	isVul, ok := successVal.Value().(bool)
-	if !ok {
-		isVul = false
+	// 如果没设置payload，则直接评估rules并返回
+	if len(poc.Payloads.Payloads) == 0 {
+		return run()
 	}
 
+	// 如果设置了payload，则遍历执行
+	isVul = false
+
+	for _, setMapVal := range poc.Payloads.Payloads {
+		setMap := setMapVal.Value.(yaml.MapSlice)
+		evaluateUpdateVariableMap(setMap)
+		fmt.Printf("%#v\n", variableMap)
+		isVul, err = run()
+		if err != nil {
+			return false, err
+		}
+
+		if !poc.Payloads.Continue {
+			return isVul, nil
+		}
+	}
 	return isVul, nil
 }

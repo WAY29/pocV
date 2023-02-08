@@ -481,6 +481,8 @@ func xrayNewReverse() (reverse *structs.Reverse) {
 		urlStr string
 	)
 	reverse = ReversePool.Get().(*structs.Reverse)
+	reverse.IsDomainNameServer = false
+	reverse.ReverseType = common_structs.ReversePlatformType
 
 	switch common_structs.ReversePlatformType {
 	case structs.ReverseType_Ceye:
@@ -497,7 +499,7 @@ func xrayNewReverse() (reverse *structs.Reverse) {
 		content, _ := requests.GetRespBody(resp)
 		urlStr = "http://" + string(content) + "/"
 	default:
-		return
+		panic("Reverse platform type error")
 	}
 
 	u, _ := url.Parse(urlStr)
@@ -506,8 +508,6 @@ func xrayNewReverse() (reverse *structs.Reverse) {
 	reverse.Url = requests.ParseUrl(u)
 	reverse.Domain = u.Hostname()
 	reverse.Ip = u.Host
-	reverse.IsDomainNameServer = false
-	reverse.ReverseType = common_structs.ReversePlatformType
 
 	return
 }
@@ -527,7 +527,7 @@ func reverseCheck(r *structs.Reverse, timeout int64) bool {
 		}
 		content, _ := requests.GetRespBody(resp)
 
-		if !bytes.Contains(content, []byte(`"data": []`)) { // api返回结果不为空
+		if resp.StatusCode == 200 && len(content) > 0 && !bytes.Contains(content, []byte(sub)) { // api返回结果不为空
 			utils.DebugF("Got reverse dnslog from %s", r.Domain)
 			return true
 		}

@@ -527,7 +527,7 @@ func reverseCheck(r *structs.Reverse, timeout int64) bool {
 		}
 		content, _ := requests.GetRespBody(resp)
 
-		if resp.StatusCode == 200 && len(content) > 0 && !bytes.Contains(content, []byte(sub)) { // api返回结果不为空
+		if resp.StatusCode == 200 && len(content) > 0 && bytes.Contains(content, []byte(sub)) { // api返回结果不为空
 			utils.DebugF("Got reverse dnslog from %s", r.Domain)
 			return true
 		}

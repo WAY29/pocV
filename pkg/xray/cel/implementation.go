@@ -513,10 +513,14 @@ func xrayNewReverse() (reverse *structs.Reverse) {
 }
 
 func reverseCheck(r *structs.Reverse, timeout int64) bool {
+	sub := strings.Split(r.Domain, ".")[0]
+	if r.Domain == "" || sub == "" {
+		return false
+	}
+
 	switch r.ReverseType {
 	case structs.ReverseType_Ceye:
 		time.Sleep(time.Second * time.Duration(timeout))
-		sub := strings.Split(r.Domain, ".")[0]
 		urlStr := fmt.Sprintf("http://api.ceye.io/v1/records?token=%s&type=dns&filter=%s", common_structs.CeyeApi, sub)
 		req, _ := http.NewRequest("GET", urlStr, nil)
 		resp, _, err := requests.DoRequest(req, false)
@@ -534,7 +538,6 @@ func reverseCheck(r *structs.Reverse, timeout int64) bool {
 		return false
 	case structs.ReverseType_DnslogCN:
 		time.Sleep(time.Second * time.Duration(timeout))
-		sub := strings.Split(r.Domain, ".")[0]
 		resp, _, err := requests.DoRequest(common_structs.DnslogCNGetRecordRequest, false)
 		if err != nil {
 			wrappedErr := errors.Wrap(err, "Reverse check error")

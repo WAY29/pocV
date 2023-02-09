@@ -65,17 +65,23 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	// 回收
 	defer func() {
 		if protoRequest != nil {
-			requests.PutUrlType(protoRequest.Url)
+			if protoRequest.Url != nil {
+				requests.PutUrlType(protoRequest.Url)
+			}
 			requests.PutRequest(protoRequest)
 
 		}
 		if oProtoRequest != nil {
-			requests.PutUrlType(oProtoRequest.Url)
+			if oProtoRequest.Url != nil {
+				requests.PutUrlType(oProtoRequest.Url)
+			}
 			requests.PutRequest(oProtoRequest)
 
 		}
 		if protoResponse != nil {
-			requests.PutUrlType(protoResponse.Url)
+			if protoResponse.Url != nil {
+				requests.PutUrlType(protoResponse.Url)
+			}
 			if protoResponse.Conn != nil {
 				requests.PutAddrType(protoResponse.Conn.Source)
 				requests.PutAddrType(protoResponse.Conn.Destination)

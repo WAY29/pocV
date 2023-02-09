@@ -3,7 +3,6 @@ package output
 import (
 	"os"
 
-	"github.com/WAY29/pocV/internal/common/check"
 	"github.com/WAY29/pocV/internal/common/errors"
 	"github.com/WAY29/pocV/pkg/common/structs"
 	"github.com/WAY29/pocV/utils"
@@ -47,10 +46,10 @@ func InitOutput(file string, jsonFlag bool) (chan structs.Result, *sizedwaitgrou
 				output.Write(result)
 			}
 
-			pocResult, ok := result.(*structs.PocResult)
-			if ok {
-				check.PutPocResult(pocResult)
-			}
+			// pocResult, ok := result.(*structs.PocResult)
+			// if ok {
+			// 	check.PutPocResult(pocResult)
+			// }
 		}
 	}()
 

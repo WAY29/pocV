@@ -86,7 +86,6 @@ func check(taskInterface interface{}) {
 	var (
 		oRequest *http.Request = nil
 
-		isVul   bool
 		err     error
 		pocName string
 	)
@@ -109,7 +108,7 @@ func check(taskInterface interface{}) {
 			oRequest, _ = http.NewRequest("GET", target, nil)
 		}
 
-		isVul, err = executeXrayPoc(oRequest, target, &poc)
+		isVul, err := executeXrayPoc(oRequest, target, &poc)
 		if err != nil {
 			utils.ErrorP(err)
 			return

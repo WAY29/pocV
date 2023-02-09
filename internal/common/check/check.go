@@ -175,5 +175,13 @@ func check(taskInterface interface{}) {
 }
 
 func PutPocResult(result *common_structs.PocResult) {
+	result.Str = ""
+	result.Success = false
+	result.URL = ""
+	result.PocName = ""
+	result.PocLink = nil
+	result.PocDescription = ""
+	result.PocAuthor = ""
+
 	ResultPool.Put(result)
 }

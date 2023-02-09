@@ -21,7 +21,7 @@ type RequestFuncType func(rule structs.Rule) error
 var (
 	CustomLibPool = sync.Pool{
 		New: func() interface{} {
-			return CustomLib{}
+			return new(CustomLib)
 		},
 	}
 )
@@ -100,18 +100,30 @@ func NewEnv(c *CustomLib) (*cel.Env, error) {
 	return cel.NewEnv(cel.Lib(c))
 }
 
-func NewEnvOption() CustomLib {
-	c := CustomLibPool.Get().(CustomLib)
+func NewEnvOption() *CustomLib {
+	c := CustomLibPool.Get().(*CustomLib)
 	reg := types.NewEmptyRegistry()
-
 	c.envOptions = NewFunctionDefineOptions(reg)
-
 	c.programOptions = NewFunctionImplOptions(reg)
 	return c
 }
 
-func PutCustomLib(c CustomLib) {
+func NewExtraFunctionEnvOption(declOpt cel.EnvOption, progOpt cel.ProgramOption) *CustomLib {
+	c := CustomLibPool.Get().(*CustomLib)
+	c.envOptions = []cel.EnvOption{declOpt}
+	c.programOptions = []cel.ProgramOption{progOpt}
+	return c
+}
+
+func PutCustomLib(c *CustomLib) {
+	c.envOptions = nil
+	c.programOptions = nil
+
 	CustomLibPool.Put(c)
+}
+
+func NewCompileOption(k string, t *exprpb.Type) cel.EnvOption {
+	return cel.Declarations(decls.NewVar(k, t))
 }
 
 // 声明环境中的变量类型和函数
@@ -126,7 +138,6 @@ func (c *CustomLib) ProgramOptions() []cel.ProgramOption {
 func (c *CustomLib) UpdateCompileOption(k string, t *exprpb.Type) {
 	c.envOptions = append(c.envOptions, cel.Declarations(decls.NewVar(k, t)))
 }
-
 func (c *CustomLib) DefineRuleFunction(requestFunc RequestFuncType, ruleName string, rule structs.Rule, function func(requestFunc RequestFuncType, ruleName string, rule structs.Rule) (bool, error)) {
 	c.envOptions = append(c.envOptions, cel.Declarations(
 		decls.NewFunction(ruleName,

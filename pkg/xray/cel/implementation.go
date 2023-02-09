@@ -554,6 +554,12 @@ func reverseCheck(r *structs.Reverse, timeout int64) bool {
 
 }
 
-func PutReverse(reverse interface{}) {
+func PutReverse(reverse *structs.Reverse) {
+	reverse.Url = nil
+	reverse.Domain = ""
+	reverse.Ip = ""
+	reverse.ReverseType = structs.ReverseType_DnslogCN
+	reverse.IsDomainNameServer = false
+
 	ReversePool.Put(reverse)
 }

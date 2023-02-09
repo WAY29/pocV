@@ -32,11 +32,6 @@ var (
 			return make([]byte, 4096)
 		},
 	}
-	VariableMapPool = sync.Pool{
-		New: func() interface{} {
-			return make(map[string]interface{})
-		},
-	}
 )
 
 type RequestFuncType func(ruleName string, rule xray_structs.Rule) error
@@ -53,7 +48,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 		oProtoRequest *xray_structs.Request
 		protoRequest  *xray_structs.Request
 		protoResponse *xray_structs.Response
-		variableMap   map[string]interface{} = VariableMapPool.Get().(map[string]interface{})
+		variableMap   map[string]interface{} = make(map[string]interface{})
 
 		oReqUrlString string
 
@@ -90,13 +85,12 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 		}
 
 		for _, v := range variableMap {
-			switch v.(type) {
+			switch value := v.(type) {
 			case *xray_structs.Reverse:
-				cel.PutReverse(v)
+				cel.PutReverse(value)
 			default:
 			}
 		}
-		VariableMapPool.Put(variableMap)
 	}()
 
 	// 初始赋值
@@ -128,7 +122,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	c := cel.NewEnvOption()
 	defer cel.PutCustomLib(c)
 
-	env, err := cel.NewEnv(&c)
+	globalEnv, err := cel.NewEnv(c)
 	if err != nil {
 		wrappedErr := errors.Wrap(err, "Environment creation error")
 		utils.ErrorP(wrappedErr)
@@ -153,25 +147,22 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 		}
 		return v
 	}
-	ReCreateEnv := func() error {
-		env, err = cel.NewEnv(&c)
+	// 刷新环境
+	ReCreateEnv := func(c *cel.CustomLib) (*cel.Env, error) {
+		env, err := cel.NewEnv(c)
 		if err != nil {
 			wrappedErr := errors.Newf(errors.EnvInitializationError, "Environment re-creation error: %v", err)
-			return wrappedErr
+			return nil, wrappedErr
 		}
-		return nil
+		return env, nil
 	}
 
 	// 定义evaluateUpdateVariableMap
-	evaluateUpdateVariableMap := func(set yaml.MapSlice) {
+	evaluateUpdateVariableMap := func(set yaml.MapSlice) error {
 		for _, item := range set {
 			k, expression := item.Key.(string), item.Value.(string)
-			// ? 需要重新生成一遍环境，否则之前增加的变量定义不生效
-			if err := ReCreateEnv(); err != nil {
-				utils.ErrorP(err)
-			}
 
-			out, err := cel.Evaluate(env, expression, variableMap)
+			out, err := cel.Evaluate(globalEnv, expression, variableMap)
 			if err != nil {
 				wrappedErr := errors.Wrapf(err, "Evalaute expression error: %s", expression)
 				utils.ErrorP(wrappedErr)
@@ -190,31 +181,42 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 					c.UpdateCompileOption(k, cel.ReverseType)
 				}
 				variableMap[k] = value
-			case int64:
+			case int, int32, int64:
 				if _, ok := variableMap[k]; !ok {
 					c.UpdateCompileOption(k, decls.Int)
 				}
-				variableMap[k] = int(value)
+				variableMap[k] = value
 			case map[string]string:
 				if _, ok := variableMap[k]; !ok {
 					c.UpdateCompileOption(k, cel.StrStrMapType)
 				}
 				variableMap[k] = value
-			default:
+			case string:
 				if _, ok := variableMap[k]; !ok {
 					c.UpdateCompileOption(k, decls.String)
 				}
 				variableMap[k] = value
+			default:
+				if _, ok := variableMap[k]; !ok {
+					c.UpdateCompileOption(k, decls.Any)
+				}
+				variableMap[k] = value
+			}
+
+			// ? 需要重新生成一遍环境，否则之前增加的变量定义不生效
+			globalEnv, err = ReCreateEnv(c)
+			if err != nil {
+				return err
 			}
 		}
-		// ? 最后再生成一遍环境，否则之前增加的变量定义不生效
-		if err := ReCreateEnv(); err != nil {
-			utils.ErrorP(err)
-		}
+		return nil
 	}
 
 	// 处理set
-	evaluateUpdateVariableMap(poc.Set)
+	if err := evaluateUpdateVariableMap(poc.Set); err != nil {
+		utils.ErrorP(err)
+		return false, err
+	}
 
 	// 渲染detail
 	detail := &poc.Detail
@@ -428,7 +430,7 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 		utils.DebugF("raw response: \n%#s", string(protoResponse.Raw))
 
 		// 执行表达式
-		out, err := cel.Evaluate(env, rule.Expression, variableMap)
+		out, err := cel.Evaluate(globalEnv, rule.Expression, variableMap)
 
 		if err != nil {
 			wrappedErr := errors.Wrapf(err, "Evalute rule[%s] expression error: %s", ruleName, rule.Expression)
@@ -442,7 +444,9 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 		}
 
 		// 处理output
-		evaluateUpdateVariableMap(rule.Output)
+		if err := evaluateUpdateVariableMap(rule.Output); err != nil {
+			return false, err
+		}
 
 		return flag, nil
 	}
@@ -462,16 +466,21 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	// 提前定义名为ruleName的函数
 	for _, ruleItem := range ruleSlice {
 		c.DefineRuleFunction(requestFunc, ruleItem.Key, ruleItem.Value, RequestInvoke)
+		if err != nil {
+			wrappedErr := errors.Wrapf(err, "Define %s error", ruleItem.Key)
+			return false, wrappedErr
+		}
 	}
-
 	// ? 最后再生成一遍环境，否则之前增加的变量定义不生效
-	if err := ReCreateEnv(); err != nil {
+	globalEnv, err = ReCreateEnv(c)
+	if err != nil {
 		utils.ErrorP(err)
+		return false, err
 	}
 
 	// 执行rule 并判断poc总体表达式结果
 	run := func() (bool, error) {
-		successVal, err := cel.Evaluate(env, poc.Expression, variableMap)
+		successVal, err := cel.Evaluate(globalEnv, poc.Expression, variableMap)
 		if err != nil {
 			wrappedErr := errors.Wrapf(err, "Evalute poc[%s] expression error: %s", poc.Name, poc.Expression)
 			return false, wrappedErr
@@ -494,8 +503,8 @@ func executeXrayPoc(oReq *http.Request, target string, poc *xray_structs.Poc) (i
 	isVul = false
 
 	for _, setMapVal := range poc.Payloads.Payloads {
-		setMap := setMapVal.Value.(yaml.MapSlice)
-		evaluateUpdateVariableMap(setMap)
+		payloads := setMapVal.Value.(yaml.MapSlice)
+		evaluateUpdateVariableMap(payloads)
 		isVul, err = run()
 		if err != nil {
 			return false, err

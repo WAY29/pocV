@@ -327,20 +327,55 @@ func GetRespBody(oResp *http.Response) ([]byte, error) {
 }
 
 func PutUrlType(urlType *structs.UrlType) {
+	urlType.Scheme = ""
+	urlType.Domain = ""
+	urlType.Host = ""
+	urlType.Port = ""
+	urlType.Path = ""
+	urlType.Query = ""
+	urlType.Fragment = ""
+
 	urlTypePool.Put(urlType)
 }
 
 func PutConnectInfo(connInfo *structs.ConnInfoType) {
+	connInfo.Source = nil
+	connInfo.Destination = nil
+
 	connectInfoTypePool.Put(connInfo)
 }
 
 func PutAddrType(addrType *structs.AddrType) {
+	addrType.Transport = ""
+	addrType.Addr = ""
+
 	addrTypePool.Put(addrType)
 }
 
 func PutRequest(request *structs.Request) {
+	request.Url = nil
+	request.Method = ""
+	request.Headers = nil
+	request.ContentType = ""
+	request.Body = nil
+	request.Raw = nil
+	request.RawHeader = nil
+	request.Content = ""
+	request.ReadTimeout = ""
+	request.ConnectionId = ""
+
 	requestPool.Put(request)
 }
 func PutResponse(response *structs.Response) {
+	response.Url = nil
+	response.Status = 0
+	response.Headers = nil
+	response.ContentType = ""
+	response.Body = nil
+	response.Raw = nil
+	response.RawHeader = nil
+	response.Latency = 0
+	response.Conn = nil
+
 	responsePool.Put(response)
 }

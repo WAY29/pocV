@@ -39,6 +39,7 @@ func cmdRun(cmd *cli.Cmd) {
 		tags        = cmd.StringsOpt("tag", make([]string, 0), "filter poc by tag")
 		file        = cmd.StringOpt("file", "", "Result file to write")
 		json        = cmd.BoolOpt("json", false, "Whether output is in JSON format or not, more information will be output")
+		success     = cmd.BoolOpt("success", false, "Only output success result")
 		proxy       = cmd.StringOpt("proxy", "", "Http proxy")
 		threads     = cmd.IntOpt("threads", 10, "Thread number")
 		timeout     = cmd.IntOpt("timeout", 20, "Request timeout")
@@ -47,7 +48,7 @@ func cmdRun(cmd *cli.Cmd) {
 		verbose     = cmd.BoolOpt("v verbose", false, "Print verbose messages")
 	)
 	// 定义用法
-	cmd.Spec = "(-t=<target> | -T=<targetFile>)... (-p=<poc> | -P=<pocpath>)... [--tag=<poc.tag>]... [--file=<file> [--json]] [--proxy=<proxy>] [--threads=<threads>] [--timeout=<timeout>] [-k=<ceye.api.key> | --key=<ceye.api.key>]  [-d=<ceye.subdomain> | --domain=<ceye.subdomain>] [--debug] [-v | --verbose]"
+	cmd.Spec = "(-t=<target> | -T=<targetFile>)... (-p=<poc> | -P=<pocpath>)... [--tag=<poc.tag>]... [--file=<file> [--json]] [--success] [--proxy=<proxy>] [--threads=<threads>] [--timeout=<timeout>] [-k=<ceye.api.key> | --key=<ceye.api.key>]  [-d=<ceye.subdomain> | --domain=<ceye.subdomain>] [--debug] [-v | --verbose]"
 
 	cmd.Action = func() {
 		// 设置变量
@@ -96,7 +97,7 @@ func cmdRun(cmd *cli.Cmd) {
 		xray_requests.InitCache(xrayTotalReqeusts)
 
 		// 初始化输出
-		outputChannel, outputWg := output.InitOutput(*file, *json)
+		outputChannel, outputWg := output.InitOutput(*file, *json, *success)
 
 		// 初始化check
 		check.InitCheck(*threads, *rate, *verbose)

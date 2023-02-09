@@ -10,7 +10,7 @@ import (
 	"github.com/remeh/sizedwaitgroup"
 )
 
-func InitOutput(file string, jsonFlag bool) (chan structs.Result, *sizedwaitgroup.SizedWaitGroup) {
+func InitOutput(file string, jsonFlag, successFlag bool) (chan structs.Result, *sizedwaitgroup.SizedWaitGroup) {
 
 	outputChannel := make(chan structs.Result)
 	outputs := make([]structs.Output, 0)
@@ -42,6 +42,9 @@ func InitOutput(file string, jsonFlag bool) (chan structs.Result, *sizedwaitgrou
 		defer outputWg.Done()
 
 		for result := range outputChannel {
+			if successFlag && !result.SUCCESS() {
+				continue
+			}
 			for _, output := range outputs {
 				output.Write(result)
 			}
